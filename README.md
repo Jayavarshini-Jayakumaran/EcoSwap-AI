@@ -1,4 +1,4 @@
-# PlastiQ 🌿
+# EcoSwap AI 🌿
 ### Scan. Understand. Choose Better.
 
 Detects plastic from photos or webcam, shows environmental impact with emotional storytelling, and suggests sustainable alternatives — powered by **Google Gemini 1.5 Flash (FREE)**.

@@ -1,3 +1,20 @@
+# Environment & secrets
 .env
+.env.local
+.env.*.local
+
+# API key config
+js/config.js
+
+# Python local server
 venv/
 __pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

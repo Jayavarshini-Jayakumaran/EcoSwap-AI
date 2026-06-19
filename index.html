@@ -160,9 +160,11 @@
   </main>
 
   <footer class="site-footer">
-    <p>PlastiQ uses Claude AI for analysis. Alternative links are AI-suggested — verify before purchase.</p>
+    <p>PlastiQ uses Gemini AI for analysis. Alternative links are AI-suggested — verify before purchase.</p>
   </footer>
 
+  <!-- Load config BEFORE app.js — js/config.js is gitignored (copy from config.example.js) -->
+  <script src="js/config.js" onerror="console.warn('js/config.js not found. Copy js/config.example.js to js/config.js and add your API key.')"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

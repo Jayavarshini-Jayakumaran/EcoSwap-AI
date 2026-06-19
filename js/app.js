@@ -1,5 +1,10 @@
+// ─── API CONFIG ───────────────────────────────
+// API key is loaded from js/config.js (gitignored, never committed)
+// Copy js/config.example.js → js/config.js and add your key there
+const API_KEY = (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY && CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
+  ? CONFIG.GEMINI_API_KEY
+  : null;
 
-const API_KEY = 'YOUR_GEMINI_API_KEY';
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
 
 // ─── STATE ────────────────────────────────────
@@ -127,8 +132,9 @@ function updateAnalyzeBtn() {
 // ─── ANALYZE ──────────────────────────────────
 async function analyzeImage() {
   if (!currentImageBase64) return;
-  if (API_KEY === 'YOUR_GEMINI_API_KEY') {
-    showError('Add your Gemini API key in js/app.js (line 8). Get one free at aistudio.google.com');
+
+  if (!API_KEY) {
+    showError('API key not configured. Copy js/config.example.js → js/config.js and add your Gemini API key. Get one free at aistudio.google.com');
     return;
   }
 
@@ -254,7 +260,6 @@ RULES:
     try {
       result = JSON.parse(clean);
     } catch (parseErr) {
-      // Try extracting JSON from within the response
       const match = clean.match(/\{[\s\S]*\}/);
       if (match) result = JSON.parse(match[0]);
       else throw new Error('Could not parse AI response. Please try again.');
@@ -282,7 +287,6 @@ function renderResults(r) {
   document.getElementById('resultsSection').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Detection card
   document.getElementById('plasticCode').textContent     = r.recyclingCode || r.plasticCode || '?';
   document.getElementById('plasticName').textContent     = r.plasticName;
   document.getElementById('plasticFullName').textContent = r.plasticFullName;
@@ -354,7 +358,6 @@ function renderResults(r) {
 function renderTimeline(years, events) {
   const track = document.getElementById('timelineTrack');
 
-  // Remove old fill if re-scanning
   const oldFill = track.querySelector('.timeline-fill');
   if (oldFill) oldFill.remove();
 
