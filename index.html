@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PlastiQ — See What You're Really Holding</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="site-header">
+    <div class="logo">
+      <span class="logo-icon">♻</span>
+      <span class="logo-text">PlastiQ</span>
+    </div>
+    <p class="tagline">Scan. Understand. Choose Better.</p>
+  </header>
+
+  <!-- HERO / INPUT SECTION -->
+  <main>
+    <section class="input-section" id="inputSection">
+      <div class="input-card">
+        <h1 class="input-heading">What plastic are you holding?</h1>
+        <p class="input-sub">Upload a photo or use your webcam — we'll tell you exactly what it costs the planet.</p>
+
+        <div class="input-tabs">
+          <button class="tab-btn active" id="tabUpload" onclick="switchTab('upload')">📁 Upload Image</button>
+          <button class="tab-btn" id="tabWebcam" onclick="switchTab('webcam')">📷 Use Webcam</button>
+        </div>
+
+        <!-- Upload Panel -->
+        <div class="tab-panel" id="panelUpload">
+          <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div class="drop-icon">🖼️</div>
+            <p class="drop-text">Click to upload or drag & drop</p>
+            <p class="drop-sub">JPG, PNG, WEBP supported</p>
+            <input type="file" id="fileInput" accept="image/*" hidden />
+          </div>
+          <div class="preview-wrap" id="uploadPreview" style="display:none;">
+            <img id="uploadedImg" src="" alt="Uploaded plastic" />
+            <button class="clear-btn" onclick="clearUpload()">✕ Clear</button>
+          </div>
+        </div>
+
+        <!-- Webcam Panel -->
+        <div class="tab-panel hidden" id="panelWebcam">
+          <div class="webcam-wrap">
+            <video id="webcamVideo" autoplay playsinline></video>
+            <canvas id="webcamCanvas" style="display:none;"></canvas>
+            <div class="webcam-captured" id="webcamCaptured" style="display:none;">
+              <img id="capturedImg" src="" alt="Captured" />
+            </div>
+          </div>
+          <div class="webcam-controls">
+            <button class="btn-primary" id="startCamBtn" onclick="startWebcam()">▶ Start Camera</button>
+            <button class="btn-primary hidden" id="captureBtn" onclick="captureFrame()">📸 Capture</button>
+            <button class="btn-secondary hidden" id="retakeBtn" onclick="retakePhoto()">↩ Retake</button>
+          </div>
+        </div>
+
+        <button class="btn-analyze" id="analyzeBtn" onclick="analyzeImage()" disabled>
+          <span id="analyzeBtnText">🔍 Analyze Plastic</span>
+          <span id="analyzeSpinner" class="spinner hidden"></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- RESULTS SECTION -->
+    <section class="results-section hidden" id="resultsSection">
+
+      <!-- PLASTIC DETECTION CARD -->
+      <div class="result-card" id="detectionCard">
+        <div class="card-eyebrow">Detection Result</div>
+        <div class="plastic-identity">
+          <div class="plastic-code-wrap">
+            <div class="plastic-code" id="plasticCode">?</div>
+          </div>
+          <div class="plastic-meta">
+            <h2 class="plastic-name" id="plasticName">—</h2>
+            <p class="plastic-fullname" id="plasticFullName">—</p>
+            <div class="confidence-row">
+              <span class="conf-label">Detection confidence</span>
+              <div class="conf-bar-wrap">
+                <div class="conf-bar" id="confBar"></div>
+              </div>
+              <span class="conf-pct" id="confPct">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="details-grid" id="detailsGrid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- EMOTIONAL IMPACT CARD -->
+      <div class="result-card impact-card" id="impactCard">
+        <div class="card-eyebrow">Planet Impact</div>
+        <h3 class="impact-headline" id="impactHeadline">—</h3>
+
+        <!-- Timeline visualizer -->
+        <div class="timeline-section">
+          <div class="timeline-label">Decomposition Timeline</div>
+          <div class="timeline-track" id="timelineTrack">
+            <div class="timeline-markers" id="timelineMarkers"></div>
+          </div>
+          <div class="timeline-legend" id="timelineLegend"></div>
+        </div>
+
+        <!-- Harm stats -->
+        <div class="harm-grid" id="harmGrid">
+          <!-- filled by JS -->
+        </div>
+
+        <!-- Animal impact -->
+        <div class="animal-impact" id="animalImpact">
+          <div class="animal-icon" id="animalIcon">🐢</div>
+          <div class="animal-text">
+            <div class="animal-name" id="animalName">Sea Turtle</div>
+            <div class="animal-desc" id="animalDesc">—</div>
+          </div>
+        </div>
+
+        <!-- Emotional sentence -->
+        <div class="emotional-quote" id="emotionalQuote">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- ALTERNATIVES CARD -->
+      <div class="result-card" id="alternativesCard">
+        <div class="card-eyebrow">Sustainable Alternatives</div>
+        <h3 class="alt-heading">Switch to these instead</h3>
+        <div class="alternatives-grid" id="alternativesGrid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- SCAN AGAIN -->
+      <div class="scan-again-wrap">
+        <button class="btn-analyze" onclick="resetApp()">🔄 Scan Another Plastic</button>
+      </div>
+
+    </section>
+
+    <!-- LOADING OVERLAY -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+      <div class="loading-box">
+        <div class="loading-ring"></div>
+        <div class="loading-messages" id="loadingMessages">
+          <p class="lm active" id="lm1">🔬 Identifying plastic polymer…</p>
+          <p class="lm" id="lm2">🌍 Calculating environmental impact…</p>
+          <p class="lm" id="lm3">🛒 Finding sustainable alternatives…</p>
+          <p class="lm" id="lm4">📊 Building your impact story…</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>PlastiQ uses Claude AI for analysis. Alternative links are AI-suggested — verify before purchase.</p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
