@@ -1,5 +1,5 @@
 /* ============================================
-   PLASTIQ — CSS
+   ECOSWAP AI — CSS
    Theme: Dark Beige bg, Dark Green borders
    ============================================ */
 
@@ -212,9 +212,7 @@ body {
   justify-content: center;
 }
 
-.webcam-wrap video,
-.webcam-wrap .webcam-captured,
-.webcam-wrap img {
+.webcam-wrap video {
   width: 100%;
   max-height: 300px;
   object-fit: cover;
@@ -346,9 +344,7 @@ body {
   margin-bottom: 1.8rem;
 }
 
-.plastic-code-wrap {
-  flex-shrink: 0;
-}
+.plastic-code-wrap { flex-shrink: 0; }
 
 .plastic-code {
   width: 72px; height: 72px;
@@ -457,9 +453,7 @@ body {
 }
 
 /* Timeline */
-.timeline-section {
-  margin-bottom: 1.8rem;
-}
+.timeline-section { margin-bottom: 1.8rem; }
 
 .timeline-label {
   font-size: 0.78rem;
@@ -632,16 +626,6 @@ body {
   border-bottom: 1.5px solid var(--border);
 }
 
-.alt-img-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  transition: opacity 0.4s;
-}
-
-.alt-img-wrap img.loaded { opacity: 1; }
-
 .alt-img-placeholder {
   font-size: 3rem;
   position: absolute;
@@ -726,12 +710,8 @@ body {
   transition: all 0.3s;
 }
 
-.lm.active {
-  color: var(--beige-light);
-  font-weight: 600;
-}
-
-.lm.done { color: var(--green-bright); }
+.lm.active { color: var(--beige-light); font-weight: 600; }
+.lm.done   { color: var(--green-bright); }
 .lm.done::before { content: '✓ '; }
 
 /* ── SCAN AGAIN ── */
@@ -741,9 +721,7 @@ body {
   padding: 0.5rem 0;
 }
 
-.scan-again-wrap .btn-analyze {
-  max-width: 300px;
-}
+.scan-again-wrap .btn-analyze { max-width: 300px; }
 
 /* ── FOOTER ── */
 .site-footer {

@@ -1,11 +1,12 @@
 // ─── API CONFIG ───────────────────────────────
-// API key is loaded from js/config.js (gitignored, never committed)
-// Copy js/config.example.js → js/config.js and add your key there
-const API_KEY = (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY && CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
+// Load from js/config.js (gitignored). Copy config.example.js → config.js and add your key.
+const API_KEY = (typeof CONFIG !== 'undefined' &&
+                 CONFIG.GEMINI_API_KEY &&
+                 CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
   ? CONFIG.GEMINI_API_KEY
   : null;
 
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
+const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // ─── STATE ────────────────────────────────────
 let currentImageBase64 = null;
@@ -14,21 +15,31 @@ let webcamStream       = null;
 let activeTab          = 'upload';
 let loadingMsgTimer    = null;
 
+// ─── INIT ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initFileUpload();
+  updateAnalyzeBtn();
+  console.log('EcoSwap AI ready. API key loaded:', !!API_KEY);
+});
+
 // ─── TAB SWITCHING ────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
+
   document.getElementById('tabUpload').classList.toggle('active', tab === 'upload');
   document.getElementById('tabWebcam').classList.toggle('active', tab === 'webcam');
   document.getElementById('panelUpload').classList.toggle('hidden', tab !== 'upload');
   document.getElementById('panelWebcam').classList.toggle('hidden', tab !== 'webcam');
 
   if (tab !== 'webcam' && webcamStream) stopWebcam();
+
+  // Reset image when switching tabs
   currentImageBase64 = null;
   updateAnalyzeBtn();
 }
 
 // ─── FILE UPLOAD ──────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+function initFileUpload() {
   const fileInput = document.getElementById('fileInput');
   const dropZone  = document.getElementById('dropZone');
 
@@ -42,7 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     dropZone.classList.add('dragging');
   });
 
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragging');
+  });
 
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
@@ -50,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) handleFileSelected(file);
   });
-});
+}
 
 function handleFileSelected(file) {
   currentImageMime = file.type || 'image/jpeg';
@@ -58,9 +71,15 @@ function handleFileSelected(file) {
   reader.onload = e => {
     const result = e.target.result;
     currentImageBase64 = result.split(',')[1];
-    document.getElementById('uploadedImg').src = result;
-    document.getElementById('uploadPreview').style.display = 'block';
-    document.getElementById('dropZone').style.display = 'none';
+
+    const uploadedImg   = document.getElementById('uploadedImg');
+    const uploadPreview = document.getElementById('uploadPreview');
+    const dropZone      = document.getElementById('dropZone');
+
+    uploadedImg.src             = result;
+    uploadPreview.style.display = 'block';
+    dropZone.style.display      = 'none';
+
     updateAnalyzeBtn();
   };
   reader.readAsDataURL(file);
@@ -68,53 +87,71 @@ function handleFileSelected(file) {
 
 function clearUpload() {
   currentImageBase64 = null;
-  document.getElementById('fileInput').value = '';
+  document.getElementById('fileInput').value          = '';
   document.getElementById('uploadPreview').style.display = 'none';
-  document.getElementById('dropZone').style.display = 'block';
+  document.getElementById('dropZone').style.display      = 'block';
   updateAnalyzeBtn();
 }
 
 // ─── WEBCAM ───────────────────────────────────
 async function startWebcam() {
   try {
-    webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    const video = document.getElementById('webcamVideo');
-    video.srcObject = webcamStream;
-    video.style.display = 'block';
+    webcamStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+
+    const video       = document.getElementById('webcamVideo');
+    const placeholder = document.getElementById('webcamPlaceholder');
+
+    video.srcObject      = webcamStream;
+    video.style.display  = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+
     document.getElementById('startCamBtn').classList.add('hidden');
     document.getElementById('captureBtn').classList.remove('hidden');
   } catch (err) {
-    showError('Camera access denied. Please allow camera permissions.');
+    showError('Camera access denied. Please allow camera permissions and try again.');
   }
 }
 
 function captureFrame() {
   const video  = document.getElementById('webcamVideo');
   const canvas = document.getElementById('webcamCanvas');
+
   canvas.width  = video.videoWidth;
   canvas.height = video.videoHeight;
+
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0);
 
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-  currentImageBase64 = dataUrl.split(',')[1];
-  currentImageMime   = 'image/jpeg';
+  const dataUrl          = canvas.toDataURL('image/jpeg', 0.92);
+  currentImageBase64     = dataUrl.split(',')[1];
+  currentImageMime       = 'image/jpeg';
 
-  document.getElementById('capturedImg').src = dataUrl;
-  document.getElementById('webcamCaptured').style.display = 'block';
-  video.style.display = 'none';
+  const capturedImg      = document.getElementById('capturedImg');
+  const webcamCaptured   = document.getElementById('webcamCaptured');
+
+  capturedImg.src                  = dataUrl;
+  webcamCaptured.style.display     = 'block';
+  video.style.display              = 'none';
 
   stopWebcam();
+
   document.getElementById('captureBtn').classList.add('hidden');
   document.getElementById('retakeBtn').classList.remove('hidden');
+
   updateAnalyzeBtn();
 }
 
 function retakePhoto() {
-  document.getElementById('webcamCaptured').style.display = 'none';
+  const webcamCaptured = document.getElementById('webcamCaptured');
+  webcamCaptured.style.display = 'none';
+
   document.getElementById('retakeBtn').classList.add('hidden');
+
   currentImageBase64 = null;
   updateAnalyzeBtn();
+
   startWebcam();
 }
 
@@ -126,15 +163,19 @@ function stopWebcam() {
 }
 
 function updateAnalyzeBtn() {
-  document.getElementById('analyzeBtn').disabled = !currentImageBase64;
+  const btn = document.getElementById('analyzeBtn');
+  if (btn) btn.disabled = !currentImageBase64;
 }
 
 // ─── ANALYZE ──────────────────────────────────
 async function analyzeImage() {
-  if (!currentImageBase64) return;
+  if (!currentImageBase64) {
+    showError('Please upload or capture an image first.');
+    return;
+  }
 
   if (!API_KEY) {
-    showError('API key not configured. Copy js/config.example.js → js/config.js and add your Gemini API key. Get one free at aistudio.google.com');
+    showError('API key not set. Copy js/config.example.js → js/config.js and add your Gemini API key. Get one free at aistudio.google.com');
     return;
   }
 
@@ -176,7 +217,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
     "name": "Sea Turtle",
     "desc": "Mistakes plastic bags and bottles for jellyfish. Over 52% of sea turtles have ingested plastic."
   },
-  "emotionalQuote": "If you dropped this bottle on the day dinosaurs went extinct, it would still be here today — and it still has 65 million years to go. Every piece of plastic ever made still exists somewhere on Earth.",
+  "emotionalQuote": "If you dropped this bottle on the day dinosaurs went extinct, it would still be here today. Every piece of plastic ever made still exists somewhere on Earth.",
   "alternatives": [
     {
       "name": "Hydro Flask Water Bottle",
@@ -185,8 +226,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "price": "~$30–$50",
       "emoji": "🥤",
       "badge": "Top Pick",
-      "url": "https://www.amazon.com/s?k=hydro+flask+water+bottle+stainless+steel",
-      "category": "reusable bottle"
+      "url": "https://www.amazon.com/s?k=hydro+flask+water+bottle+stainless+steel"
     },
     {
       "name": "Klean Kanteen Classic",
@@ -195,8 +235,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "price": "~$20–$35",
       "emoji": "♻️",
       "badge": "Eco Certified",
-      "url": "https://www.amazon.com/s?k=klean+kanteen+stainless+bottle",
-      "category": "reusable bottle"
+      "url": "https://www.amazon.com/s?k=klean+kanteen+stainless+bottle"
     },
     {
       "name": "Stasher Reusable Bag",
@@ -205,8 +244,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "price": "~$10–$20",
       "emoji": "🌿",
       "badge": "Best Value",
-      "url": "https://www.amazon.com/s?k=stasher+reusable+silicone+bags",
-      "category": "reusable storage"
+      "url": "https://www.amazon.com/s?k=stasher+reusable+silicone+bags"
     }
   ]
 }
@@ -216,8 +254,8 @@ If NO plastic is visible, return:
 
 RULES:
 - Tailor ALL fields to the actual plastic detected in the image
-- Match alternatives to the item type (bottle→bottles, bag→bags, container→containers)
-- Make emotionalQuote vivid, human, and devastating in its truth
+- Match alternatives to the item type (bottle→reusable bottles, bag→reusable bags, etc.)
+- emotionalQuote must be vivid and human
 - impactHeadline must be punchy and emotionally resonant
 - Return ONLY raw JSON, nothing else`;
 
@@ -228,38 +266,27 @@ RULES:
       body: JSON.stringify({
         contents: [{
           parts: [
-            {
-              inline_data: {
-                mime_type: currentImageMime,
-                data: currentImageBase64
-              }
-            },
+            { inline_data: { mime_type: currentImageMime, data: currentImageBase64 } },
             { text: prompt }
           ]
         }],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 2048
-        }
+        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
       })
     });
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      const msg = err.error?.message || `API error ${response.status}`;
-      throw new Error(msg);
+      throw new Error(err.error?.message || `API error ${response.status}`);
     }
 
     const data = await response.json();
-
-    // Extract text from Gemini response
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const clean = raw.replace(/```json|```/g, '').trim();
 
     let result;
     try {
       result = JSON.parse(clean);
-    } catch (parseErr) {
+    } catch {
       const match = clean.match(/\{[\s\S]*\}/);
       if (match) result = JSON.parse(match[0]);
       else throw new Error('Could not parse AI response. Please try again.');
@@ -276,7 +303,7 @@ RULES:
 
   } catch (err) {
     showLoading(false);
-    console.error(err);
+    console.error('Analysis error:', err);
     showError('Analysis failed: ' + err.message);
   }
 }
@@ -287,9 +314,10 @@ function renderResults(r) {
   document.getElementById('resultsSection').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
+  // Detection card
   document.getElementById('plasticCode').textContent     = r.recyclingCode || r.plasticCode || '?';
-  document.getElementById('plasticName').textContent     = r.plasticName;
-  document.getElementById('plasticFullName').textContent = r.plasticFullName;
+  document.getElementById('plasticName').textContent     = r.plasticName    || 'Unknown';
+  document.getElementById('plasticFullName').textContent = r.plasticFullName || '';
 
   const confPct = parseInt(r.confidence) || 80;
   setTimeout(() => {
@@ -330,8 +358,8 @@ function renderResults(r) {
     </div>
   `;
 
-  document.getElementById('impactHeadline').textContent = r.impactHeadline;
-
+  // Impact card
+  document.getElementById('impactHeadline').textContent = r.impactHeadline || '';
   renderTimeline(r.decompositionYears, r.timelineEvents || []);
 
   if (r.harmStats?.length) {
@@ -350,7 +378,9 @@ function renderResults(r) {
     document.getElementById('animalDesc').textContent = r.affectedAnimal.desc;
   }
 
-  document.getElementById('emotionalQuote').textContent = r.emotionalQuote;
+  document.getElementById('emotionalQuote').textContent = r.emotionalQuote || '';
+
+  // Alternatives
   renderAlternatives(r.alternatives || []);
 }
 
@@ -362,7 +392,7 @@ function renderTimeline(years, events) {
   if (oldFill) oldFill.remove();
 
   const fill = document.createElement('div');
-  fill.className = 'timeline-fill';
+  fill.className   = 'timeline-fill';
   fill.style.width = '0%';
   track.insertBefore(fill, track.firstChild);
 
@@ -375,16 +405,15 @@ function renderTimeline(years, events) {
   const markers = document.getElementById('timelineMarkers');
   markers.innerHTML = '';
 
-  const allPins = [{ label: 'Today', year: 0 }, ...events];
-
-  allPins.forEach(ev => {
+  [{ label: 'Today', year: 0 }, ...events].forEach(ev => {
     const pct = ev.year === 0 ? 2 : (ev.year / maxYears * 100);
     const pin = document.createElement('div');
-    pin.className = 'timeline-pin';
+    pin.className  = 'timeline-pin';
     pin.style.left = Math.min(pct, 96) + '%';
-    pin.innerHTML = `
+    pin.innerHTML  = `
       <div class="timeline-pin-dot"></div>
-      <div class="timeline-pin-label">${ev.year === 0 ? 'Now' : ev.year + 'y'}<br>
+      <div class="timeline-pin-label">
+        ${ev.year === 0 ? 'Now' : ev.year + 'y'}<br>
         <span style="font-size:0.6rem;opacity:0.8">${ev.label}</span>
       </div>
     `;
@@ -429,7 +458,8 @@ function showLoading(show) {
     overlay.classList.add('hidden');
     clearInterval(loadingMsgTimer);
     ['lm1','lm2','lm3','lm4'].forEach(id => {
-      document.getElementById(id).className = 'lm';
+      const el = document.getElementById(id);
+      if (el) el.className = 'lm';
     });
   }
 }
@@ -437,22 +467,33 @@ function showLoading(show) {
 function animateLoadingMessages() {
   const ids = ['lm1','lm2','lm3','lm4'];
   let current = 0;
-  document.getElementById(ids[0]).className = 'lm active';
+  const first = document.getElementById(ids[0]);
+  if (first) first.className = 'lm active';
 
   loadingMsgTimer = setInterval(() => {
-    if (current < ids.length) document.getElementById(ids[current]).className = 'lm done';
+    const cur = document.getElementById(ids[current]);
+    if (cur) cur.className = 'lm done';
     current++;
-    if (current < ids.length) document.getElementById(ids[current]).className = 'lm active';
+    if (current < ids.length) {
+      const next = document.getElementById(ids[current]);
+      if (next) next.className = 'lm active';
+    } else {
+      clearInterval(loadingMsgTimer);
+    }
   }, 1800);
 }
 
-// ─── ERROR ────────────────────────────────────
+// ─── ERROR TOAST ──────────────────────────────
 function showError(msg) {
+  // Remove any existing toast first
+  const existing = document.querySelector('.error-toast');
+  if (existing) existing.remove();
+
   const toast = document.createElement('div');
-  toast.className = 'error-toast';
+  toast.className   = 'error-toast';
   toast.textContent = msg;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 5000);
+  setTimeout(() => toast.remove(), 6000);
 }
 
 // ─── RESET ────────────────────────────────────
@@ -464,11 +505,21 @@ function resetApp() {
   document.getElementById('inputSection').classList.remove('hidden');
 
   clearUpload();
-  document.getElementById('webcamCaptured').style.display = 'none';
-  document.getElementById('webcamVideo').style.display = 'none';
+
+  const webcamCaptured  = document.getElementById('webcamCaptured');
+  const webcamVideo     = document.getElementById('webcamVideo');
+  const webcamPlaceholder = document.getElementById('webcamPlaceholder');
+
+  webcamCaptured.style.display = 'none';
+  webcamVideo.style.display    = 'none';
+  if (webcamPlaceholder) webcamPlaceholder.style.display = 'block';
+
   document.getElementById('startCamBtn').classList.remove('hidden');
   document.getElementById('captureBtn').classList.add('hidden');
   document.getElementById('retakeBtn').classList.add('hidden');
+
+  // Reset confidence bar
+  document.getElementById('confBar').style.width = '0%';
 
   switchTab('upload');
   window.scrollTo({ top: 0, behavior: 'smooth' });

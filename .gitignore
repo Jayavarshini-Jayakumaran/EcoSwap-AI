@@ -3,7 +3,7 @@
 .env.local
 .env.*.local
 
-# API key config
+# API key config (never commit this!)
 js/config.js
 
 # Python local server

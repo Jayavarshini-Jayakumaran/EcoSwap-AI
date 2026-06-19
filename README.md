@@ -31,6 +31,12 @@ const CONFIG = {
 
 Double-click `index.html` in your browser.
 
+> 💡 For webcam support on some browsers, run a local server:
+> ```bash
+> python3 -m http.server 8080
+> # then open http://localhost:8080
+> ```
+
 ## 📁 Project Structure
 
 ```
