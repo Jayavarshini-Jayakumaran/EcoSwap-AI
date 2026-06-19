@@ -6,7 +6,7 @@ const API_KEY = (typeof CONFIG !== 'undefined' &&
   ? CONFIG.GEMINI_API_KEY
   : null;
 
-const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 // ─── STATE ────────────────────────────────────
 let currentImageBase64 = null;
