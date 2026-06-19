@@ -5,7 +5,7 @@ Detects plastic from photos or webcam, shows environmental impact with emotional
 
 ---
 
-## ⚡ Quick Start (2 steps)
+## ⚡ Quick Start
 
 ### Step 1 — Get your FREE Gemini API key
 1. Go to **[aistudio.google.com](https://aistudio.google.com)**
@@ -15,36 +15,38 @@ Detects plastic from photos or webcam, shows environmental impact with emotional
 > ✅ No credit card needed. Free tier = **1,500 requests/day** forever.
 
 ### Step 2 — Add it to the app
-Open `js/app.js` and replace **line 8**:
-
+```bash
+cp js/config.example.js js/config.js
+```
+Then open `js/config.js` and replace the placeholder with your key:
 ```js
-const API_KEY = 'YOUR_GEMINI_API_KEY';
+const CONFIG = {
+  GEMINI_API_KEY: 'your_actual_gemini_api_key_here'
+};
 ```
 
 ---
 
 ## ▶ Run the App
 
-**Option A — Open directly:**
 Double-click `index.html` in your browser.
-
-**Option B — Local server (needed for webcam on some browsers):**
-```bash
-# Python
-python3 -m http.server 8080
-# then open http://localhost:8080
 
 ## 📁 Project Structure
 
 ```
-plastiq/
-├── index.html         Single-page app
+ecoswap/
+├── index.html              Single-page app
 ├── css/
-│   └── style.css      Dark beige + green border theme
+│   └── style.css           Dark beige + green border theme
 ├── js/
-│   └── app.js         All logic (webcam, upload, Gemini AI, render)
+│   ├── app.js              All logic (webcam, upload, Gemini AI, render)
+│   └── config.example.js   Copy → config.js and add your API key
+├── .env                    Reference for environment variables
+├── .gitignore
 └── README.md
 ```
+
+> ⚠️ `js/config.js` is in `.gitignore` — your API key will never be committed.
 
 ---
 
@@ -61,23 +63,13 @@ plastiq/
 
 ---
 
-## 🚀 Deploy for Free
-
-Push to GitHub → connect to [Vercel](https://vercel.com) or [Netlify](https://netlify.com) → deploy as static site. No build step needed.
-
-> ⚠️ For public deployment, move the API call to a serverless function to protect your API key.
+♻️ Choose better. Live greener.
 
 ---
+📧 **Email** — [jayavarshinijayakumaran11@gmail.com](mailto:jayavarshinijayakumaran11@gmail.com)
 
-## 🔧 Customization
+🙌 **Connect** — [LinkedIn: Jayavarshini Jayakumaran](https://www.linkedin.com/in/jayavarshini-jayakumaran)
 
-| What | Where |
-|---|---|
-| API Key | `js/app.js` line 8 |
-| Colors | `css/style.css` `:root` variables |
-| AI Prompt | `analyzeImage()` function in `js/app.js` |
-| Model | Change `gemini-1.5-flash` to `gemini-1.5-pro` for better accuracy |
+📄 **License** — [MIT](LICENSE)
 
----
-
-Built with ♻️ using Vanilla JS + Google Gemini AI
+<p align="center"><b>Finish what you started 💻</b></p>
