@@ -1,7 +1,17 @@
 # EcoSwap AI 🌿
 ### Scan. Understand. Choose Better.
 
-Detects plastic from photos or webcam, shows environmental impact with emotional storytelling, and suggests sustainable alternatives — powered by **Google Gemini 1.5 Flash (FREE)**.
+Detects plastic from photos or webcam, shows environmental impact with emotional storytelling, and suggests sustainable alternatives — powered by **Google Gemini (FREE)**.
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=YOUR_VIDEO_ID">
+    <img src="https://img.youtube.com/vi/YOUR_VIDEO_ID/maxresdefault.jpg" alt="EcoSwap AI demo video preview" width="600" />
+    <br />
+    <img src="https://img.shields.io/badge/▶-Watch%20Demo%20on%20YouTube-red?style=for-the-badge&logo=youtube" alt="Watch Now" />
+  </a>
+</p>
+
+> 🎬 Replace `YOUR_VIDEO_ID` in the two links above with your actual YouTube video ID once it's uploaded (the part after `watch?v=` in the URL).
 
 ---
 
@@ -45,14 +55,14 @@ ecoswap/
 ├── css/
 │   └── style.css           Dark beige + green border theme
 ├── js/
-│   ├── app.js              All logic (webcam, upload, Gemini AI, render)
-│   └── config.example.js   Copy → config.js and add your API key
-├── .env                    Reference for environment variables
+│   ├── app.js               All logic (webcam, upload, Gemini AI, render)
+│   └── config.example.js    Copy → config.js and add your API keys
+├── .env                     Reference for environment variables
 ├── .gitignore
 └── README.md
 ```
 
-> ⚠️ `js/config.js` is in `.gitignore` — your API key will never be committed.
+> ⚠️ `js/config.js` is in `.gitignore` — your API keys will never be committed.
 
 ---
 
@@ -65,7 +75,17 @@ ecoswap/
 | 🧠 AI Detection | Plastic type, code, recyclability, toxicity, confidence % |
 | 🌍 Impact Story | Animated decomposition timeline + harm stats + affected animal |
 | 💬 Emotional Quote | AI-generated devastating truth about that specific plastic |
-| 🛒 Alternatives | 3 eco products matched to item type, with Amazon links |
+| 🛒 Sustainable Alternatives | 5 eco products, budget → premium, with category icons |
+| 💰 Price Filter | Filter alternatives by min/max price, sorted low to high |
+| 🌐 Multi-Marketplace | Switch between Amazon India, US, UK, Germany, Canada, Australia, Japan — prices and links update together |
+
+---
+
+## 🛠️ Built With
+
+- **Google Gemini 2.5 Flash Lite** — multimodal plastic detection & environmental analysis
+- **Vanilla JavaScript, HTML5, CSS3** — no framework, no build step
+- **MediaDevices API** — webcam capture
 
 ---
 

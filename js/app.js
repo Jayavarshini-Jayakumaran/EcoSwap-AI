@@ -1,19 +1,14 @@
-// API CONFIG
+// ─── API CONFIG ───────────────────────────────
 const API_KEY = (typeof CONFIG !== 'undefined' &&
                  CONFIG.GEMINI_API_KEY &&
                  CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
   ? CONFIG.GEMINI_API_KEY
   : null;
 
-// Pexels powers real product photos for alternatives (free)
-// Get a free key instantly at https://www.pexels.com/api/
-const PEXELS_API_KEY = (typeof CONFIG !== 'undefined' &&
-                 CONFIG.PEXELS_API_KEY &&
-                 CONFIG.PEXELS_API_KEY !== 'your_actual_pexels_api_key_here')
-  ? CONFIG.PEXELS_API_KEY
-  : null;
+// Note: product images are hand-built SVG icons (see CATEGORY_ICONS below),
+// not a live photo search — so no image API key is needed.
 
-// Using gemini-1.5-flash (free tier: 1,500 req/day)
+// Using gemini-1.5-flash (free tier: 1,500 req/day) instead of gemini-2.0-flash
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
 // ─── STATE ────────────────────────────────────
@@ -22,9 +17,11 @@ let currentImageMime   = 'image/jpeg';
 let webcamStream       = null;
 let activeTab          = 'upload';
 let loadingMsgTimer    = null;
-let lastAlternatives   = []; // cached for client-side price filtering, no re-call needed
+let lastAlternatives    = []; // cached for client-side price filtering, no re-call needed
+let analysisRequestId   = 0;  // guards against stale async responses overwriting newer ones
+let resultMarketplaceCode = 'IN'; // marketplace that generated the CURRENTLY DISPLAYED prices/links
 
-// MARKETPLACE / CURRENCY CONFIG 
+// ─── MARKETPLACE / CURRENCY CONFIG ────────────
 const MARKETPLACES = {
   IN: { domain: 'amazon.in',  symbol: '₹', code: 'INR', label: 'India (₹ INR)' },
   US: { domain: 'amazon.com', symbol: '$', code: 'USD', label: 'United States ($ USD)' },
@@ -41,6 +38,13 @@ function getMarketplace() {
   return MARKETPLACES[currentMarketplace] || MARKETPLACES.IN;
 }
 
+function getResultMarketplace() {
+  // Use this anywhere we're displaying/linking data tied to an already-rendered
+  // result set (price symbol, Amazon domain) — NOT the live dropdown value,
+  // which may have changed again before a new analysis finished.
+  return MARKETPLACES[resultMarketplaceCode] || MARKETPLACES.IN;
+}
+
 function setMarketplace(code) {
   if (MARKETPLACES[code]) {
     currentMarketplace = code;
@@ -49,15 +53,12 @@ function setMarketplace(code) {
   }
 }
 
-// INIT 
+// ─── INIT ─────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initFileUpload();
   updateAnalyzeBtn();
   initMarketplaceSelector();
   console.log('EcoSwap AI ready. API key loaded:', !!API_KEY);
-  if (!PEXELS_API_KEY) {
-    console.warn('⚠️ No Pexels API key set — product cards will use the Wikimedia fallback (limited coverage) or a leaf icon. Add PEXELS_API_KEY to js/config.js for real photos. Get a free key at https://www.pexels.com/api/');
-  }
 });
 
 function initMarketplaceSelector() {
@@ -80,7 +81,7 @@ function initMarketplaceSelector() {
   });
 }
 
-// TAB SWITCHING 
+// ─── TAB SWITCHING ────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
 
@@ -95,7 +96,7 @@ function switchTab(tab) {
   updateAnalyzeBtn();
 }
 
-// FILE UPLOAD
+// ─── FILE UPLOAD ──────────────────────────────
 function initFileUpload() {
   const fileInput = document.getElementById('fileInput');
   const dropZone  = document.getElementById('dropZone');
@@ -150,7 +151,7 @@ function clearUpload() {
   updateAnalyzeBtn();
 }
 
-// WEBCAM
+// ─── WEBCAM ───────────────────────────────────
 async function startWebcam() {
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({
@@ -224,7 +225,7 @@ function updateAnalyzeBtn() {
   if (btn) btn.disabled = !currentImageBase64;
 }
 
-// ANALYZE
+// ─── ANALYZE ──────────────────────────────────
 async function analyzeImage() {
   if (!currentImageBase64) {
     showError('Please upload or capture an image first.');
@@ -238,7 +239,9 @@ async function analyzeImage() {
 
   showLoading(true);
 
-  const market = getMarketplace();
+  const requestId = ++analysisRequestId; // this request's identity
+  const requestMarketplaceCode = currentMarketplace; // snapshot — survives if user flips the dropdown again mid-flight
+  const market = MARKETPLACES[requestMarketplaceCode];
 
   const prompt = `You are an expert environmental scientist and material analyst. Analyze this image and detect any plastic material present.
 
@@ -284,7 +287,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "description": "Platinum silicone bags — microwave, dishwasher & freezer safe. Replaces 260 plastic bags/year.",
       "price": "${market.symbol}800–${market.symbol}1200",
       "priceValue": 1000,
-      "imageQuery": "Stasher reusable silicone bag",
+      "imageCategory": "silicone_food_bag",
       "badge": "Best Value"
     },
     {
@@ -293,7 +296,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "description": "BPA-free steel bottle, lifetime guarantee. Made from 90% post-consumer recycled steel.",
       "price": "${market.symbol}1500–${market.symbol}2200",
       "priceValue": 1800,
-      "imageQuery": "Klean Kanteen stainless steel water bottle",
+      "imageCategory": "steel_water_bottle",
       "badge": "Eco Certified"
     },
     {
@@ -302,7 +305,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "description": "Insulated stainless steel — keeps drinks cold 24h, hot 12h. Zero plastic.",
       "price": "${market.symbol}2500–${market.symbol}3500",
       "priceValue": 3000,
-      "imageQuery": "Hydro Flask insulated water bottle",
+      "imageCategory": "insulated_flask",
       "badge": "Top Pick"
     },
     {
@@ -311,7 +314,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "description": "Triple-walled insulation, leak-proof, no condensation. Wide range of colors.",
       "price": "${market.symbol}2800–${market.symbol}3800",
       "priceValue": 3300,
-      "imageQuery": "S'well stainless steel water bottle",
+      "imageCategory": "steel_water_bottle",
       "badge": "Stylish Pick"
     },
     {
@@ -320,7 +323,7 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
       "description": "UV-C self-cleaning technology kills 99% of bacteria. Premium insulated steel.",
       "price": "${market.symbol}6000–${market.symbol}8000",
       "priceValue": 7000,
-      "imageQuery": "Larq self cleaning water bottle",
+      "imageCategory": "insulated_flask",
       "badge": "Premium"
     }
   ]
@@ -335,7 +338,7 @@ RULES:
 - Match alternatives to the item type (bottle→reusable bottles, bag→reusable bags, etc.)
 - ALL prices must be realistic for the ${market.label} marketplace, shown with the "${market.symbol}" symbol and currency code ${market.code}
 - Every alternative MUST include "priceValue": a plain number (no symbol, no range) representing the approximate average/mid price in ${market.code}, used for sorting low to high
-- Every alternative MUST include "imageQuery": a short 3-5 word search term (brand + product type) used to look up a real product photo — do NOT include an emoji field
+- Every alternative MUST include "imageCategory": pick the single closest match from this exact fixed list (use the value exactly as written, do not invent new ones): ${CATEGORY_KEYS}
 - emotionalQuote must be vivid and human
 - impactHeadline must be punchy and emotionally resonant
 - Do NOT include a "url" field for alternatives — that is generated separately
@@ -385,15 +388,20 @@ RULES:
 
     showLoading(false);
 
+    // If a newer analysis was triggered (e.g. user changed marketplace again
+    // while this request was in flight), discard this stale response.
+    if (requestId !== analysisRequestId) return;
+
     if (!result.detected) {
       showError(result.message || 'No plastic detected. Try another image.');
       return;
     }
 
-    renderResults(result);
+    renderResults(result, requestMarketplaceCode);
 
   } catch (err) {
     showLoading(false);
+    if (requestId !== analysisRequestId) return; // stale — a newer request superseded this one
     console.error('Analysis error:', err);
 
     if (err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('exceeded')) {
@@ -404,7 +412,7 @@ RULES:
   }
 }
 
-// QUOTA ERROR MODAL 
+// ─── QUOTA ERROR MODAL ────────────────────────
 function showQuotaError() {
   // Remove existing modal if any
   const existing = document.getElementById('quotaModal');
@@ -466,8 +474,9 @@ function showQuotaError() {
   document.body.appendChild(modal);
 }
 
-// RENDER RESULTS
-function renderResults(r) {
+// ─── RENDER RESULTS ───────────────────────────
+function renderResults(r, marketplaceCode) {
+  resultMarketplaceCode = marketplaceCode || currentMarketplace; // pin the marketplace these results belong to
   document.getElementById('inputSection').classList.add('hidden');
   document.getElementById('resultsSection').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -540,7 +549,7 @@ function renderResults(r) {
   renderAlternatives(lastAlternatives);
 }
 
-// TIMELINE
+// ─── TIMELINE ─────────────────────────────────
 function renderTimeline(years, events) {
   const track = document.getElementById('timelineTrack');
 
@@ -583,7 +592,7 @@ function renderTimeline(years, events) {
   `;
 }
 
-// PRICE FILTER
+// ─── PRICE FILTER ──────────────────────────────
 let priceFilterMin = null;
 let priceFilterMax = null;
 
@@ -599,7 +608,7 @@ function renderPriceFilterBar(alts) {
   const values = alts.map(extractPriceValue).filter(v => isFinite(v));
   const lo = Math.floor(Math.min(...values));
   const hi = Math.ceil(Math.max(...values));
-  const sym = getMarketplace().symbol;
+  const sym = getResultMarketplace().symbol;
 
   if (priceFilterMin === null) priceFilterMin = lo;
   if (priceFilterMax === null) priceFilterMax = hi;
@@ -649,76 +658,114 @@ function filterAndRenderCards() {
   renderAlternativeCards(filtered);
 }
 
-// PRODUCT IMAGES (real photos)
-const productImageCache = {}; // memoize by query within this session
+// ─── PRODUCT VISUALS (hand-built SVG icons) ────
+// Live photo search (Pexels, Wikimedia) kept returning mismatched images —
+// e.g. a perfume spray bottle for "water bottle" — because nothing could
+// verify what was actually IN a search result before showing it. Rather than
+// trust another guess, each category below is a hand-built SVG illustration,
+// so it is structurally guaranteed to match its label — there's no search
+// step left to get wrong.
+const CATEGORY_ICONS = {
+  steel_water_bottle: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="40" y="8" width="20" height="10" rx="2" fill="var(--beige-mid)"/>
+    <rect x="36" y="16" width="28" height="8" rx="2" fill="var(--green-bright)"/>
+    <path d="M32 24 L32 36 Q32 40 36 42 L36 84 Q36 90 42 90 L58 90 Q64 90 64 84 L64 42 Q68 40 68 36 L68 24 Z" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <rect x="38" y="50" width="24" height="14" rx="2" fill="var(--green-glow)"/>
+  </svg>`,
+  insulated_flask: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="42" y="6" width="16" height="8" rx="2" fill="var(--beige-mid)"/>
+    <path d="M30 14 L70 14 L66 30 L66 86 Q66 92 60 92 L40 92 Q34 92 34 86 L34 30 Z" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <rect x="38" y="34" width="24" height="40" rx="3" fill="var(--green-glow)"/>
+    <circle cx="50" cy="54" r="6" fill="none" stroke="var(--green-bright)" stroke-width="1.5"/>
+  </svg>`,
+  glass_water_bottle: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="42" y="10" width="16" height="12" rx="2" fill="var(--beige-mid)"/>
+    <path d="M40 22 Q40 28 36 34 L36 84 Q36 90 42 90 L58 90 Q64 90 64 84 L64 34 Q60 28 60 22 Z" fill="none" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <rect x="40" y="50" width="20" height="30" rx="2" fill="var(--green-glow)"/>
+  </svg>`,
+  silicone_food_bag: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="22" y="26" width="56" height="56" rx="10" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <path d="M30 26 Q30 14 50 14 Q70 14 70 26" fill="none" stroke="var(--beige-mid)" stroke-width="3"/>
+    <rect x="32" y="42" width="36" height="30" rx="4" fill="var(--green-glow)"/>
+    <line x1="22" y1="52" x2="78" y2="52" stroke="var(--green-bright)" stroke-width="1.5" stroke-dasharray="3,3"/>
+  </svg>`,
+  cotton_tote_bag: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <path d="M34 32 Q34 16 50 16 Q66 16 66 32" fill="none" stroke="var(--beige-mid)" stroke-width="4"/>
+    <rect x="20" y="32" width="60" height="56" rx="4" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <rect x="30" y="46" width="40" height="32" rx="3" fill="var(--green-glow)"/>
+  </svg>`,
+  mesh_produce_bag: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <path d="M30 18 Q30 10 50 10 Q70 10 70 18" fill="none" stroke="var(--beige-mid)" stroke-width="3"/>
+    <path d="M26 18 L74 18 L66 86 Q64 90 60 90 L40 90 Q36 90 34 86 Z" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <g stroke="var(--green-bright)" stroke-width="1" opacity="0.5">
+      <line x1="30" y1="30" x2="70" y2="30"/><line x1="31" y1="42" x2="69" y2="42"/>
+      <line x1="32" y1="54" x2="68" y2="54"/><line x1="33" y1="66" x2="67" y2="66"/>
+      <line x1="38" y1="20" x2="46" y2="86"/><line x1="50" y1="20" x2="50" y2="88"/><line x1="62" y1="20" x2="54" y2="86"/>
+    </g>
+  </svg>`,
+  beeswax_food_wrap: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="14" y="14" width="72" height="72" rx="6" fill="var(--bg-input)" stroke="var(--amber)" stroke-width="2.5" transform="rotate(-4 50 50)"/>
+    <path d="M30 50 Q40 38 50 50 Q60 62 70 50" fill="none" stroke="var(--amber)" stroke-width="2.5" transform="rotate(-4 50 50)"/>
+    <circle cx="38" cy="42" r="3" fill="var(--amber)" opacity="0.6" transform="rotate(-4 50 50)"/>
+    <circle cx="62" cy="58" r="3" fill="var(--amber)" opacity="0.6" transform="rotate(-4 50 50)"/>
+  </svg>`,
+  bamboo_cutlery_set: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="18" y="14" width="9" height="62" rx="3" fill="var(--beige-mid)"/>
+    <path d="M18 14 L18 30 M22.5 14 L22.5 30 M27 14 L27 30" stroke="var(--bg-input)" stroke-width="1.5"/>
+    <rect x="45" y="14" width="9" height="62" rx="3" fill="var(--beige-mid)"/>
+    <ellipse cx="49.5" cy="20" rx="9" ry="10" fill="var(--beige-mid)"/>
+    <path d="M72 14 Q82 14 82 28 Q82 40 72 44 L72 76" fill="none" stroke="var(--beige-mid)" stroke-width="9" stroke-linecap="round"/>
+  </svg>`,
+  glass_food_container: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="20" y="18" width="60" height="14" rx="4" fill="var(--green-bright)"/>
+    <rect x="22" y="34" width="56" height="48" rx="6" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <rect x="30" y="44" width="40" height="28" rx="3" fill="var(--green-glow)"/>
+  </svg>`,
+  reusable_coffee_cup: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <path d="M32 28 L68 28 L64 86 Q64 90 60 90 L40 90 Q36 90 36 86 Z" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <ellipse cx="50" cy="28" rx="18" ry="6" fill="var(--green-glow)" stroke="var(--green-bright)" stroke-width="2"/>
+    <path d="M68 42 Q82 42 82 56 Q82 68 68 68" fill="none" stroke="var(--green-bright)" stroke-width="3"/>
+    <rect x="44" y="10" width="12" height="14" rx="3" fill="var(--beige-mid)"/>
+  </svg>`,
+  metal_straw_set: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <line x1="30" y1="10" x2="22" y2="90" stroke="var(--green-bright)" stroke-width="5" stroke-linecap="round"/>
+    <line x1="50" y1="10" x2="46" y2="90" stroke="var(--beige-mid)" stroke-width="5" stroke-linecap="round"/>
+    <line x1="70" y1="10" x2="70" y2="90" stroke="var(--green-bright)" stroke-width="5" stroke-linecap="round"/>
+    <rect x="14" y="58" width="72" height="14" rx="7" fill="var(--bg-input)" stroke="var(--border-mid)" stroke-width="1.5"/>
+  </svg>`,
+  reusable_shopping_bag: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <path d="M30 30 Q30 12 50 12 Q70 12 70 30" fill="none" stroke="var(--beige-mid)" stroke-width="4"/>
+    <path d="M18 30 L82 30 L76 88 L24 88 Z" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <path d="M30 50 L70 50" stroke="var(--green-bright)" stroke-width="2" opacity="0.5"/>
+    <path d="M27 60 L73 60" stroke="var(--green-bright)" stroke-width="2" opacity="0.5"/>
+  </svg>`,
+};
 
-async function fetchFromPexels(query) {
-  if (!PEXELS_API_KEY) return null;
-  const res = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=square`, {
-    headers: { Authorization: PEXELS_API_KEY }
-  });
-  if (!res.ok) throw new Error(`Pexels error ${res.status}`);
-  const data = await res.json();
-  return data?.photos?.[0]?.src?.medium || null;
-}
+const CATEGORY_KEYS = Object.keys(CATEGORY_ICONS).join(', ');
 
-async function fetchFromWikimedia(query) {
-  // Fallback only — Commons rarely has true commercial product photography,
-  // but it costs nothing and needs no key, so it's a reasonable last resort.
-  const searchUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=1&prop=imageinfo&iiprop=url&iiurlwidth=400`;
-  const res = await fetch(searchUrl);
-  if (!res.ok) throw new Error('Wikimedia search failed');
-  const data = await res.json();
-  const pages = data?.query?.pages;
-  if (!pages) return null;
-  const page = Object.values(pages)[0];
-  return page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url || null;
-}
-
-async function fetchProductImage(query) {
-  if (!query) return null;
-  if (productImageCache[query] !== undefined) return productImageCache[query];
-
-  let url = null;
-  try {
-    url = await fetchFromPexels(query);
-  } catch (e) {
-    console.warn('Pexels lookup failed for', query, e);
-  }
-
-  if (!url) {
-    try {
-      url = await fetchFromWikimedia(query);
-    } catch (e) {
-      console.warn('Wikimedia fallback failed for', query, e);
-    }
-  }
-
-  productImageCache[query] = url;
-  return url;
+function getCategoryIcon(category) {
+  return CATEGORY_ICONS[category] || null;
 }
 
 function altCardImageId(idx) {
   return `altImg_${idx}`;
 }
 
-async function loadAlternativeImages(sorted) {
-  // Fire all lookups in parallel, swap each <img> in as it resolves.
+function loadAlternativeImages(sorted) {
   sorted.forEach((alt, idx) => {
-    const query = alt.imageQuery || [alt.brand, alt.name].filter(Boolean).join(' ');
-    fetchProductImage(query).then(url => {
-      const wrap = document.getElementById(altCardImageId(idx));
-      if (!wrap) return;
-      if (url) {
-        wrap.innerHTML = `<img src="${url}" alt="${alt.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;background:#fff;" onerror="this.parentElement.innerHTML='<div class=\\'alt-img-fallback\\'>🌿</div>'" />`;
-      } else {
-        wrap.innerHTML = `<div class="alt-img-fallback">🌿</div>`;
-      }
-    });
+    const wrap = document.getElementById(altCardImageId(idx));
+    if (!wrap) return;
+    const icon = getCategoryIcon(alt.imageCategory);
+    if (icon) {
+      wrap.innerHTML = `<div class="alt-img-icon">${icon}</div>`;
+    } else {
+      // Unrecognized/missing category — honest fallback rather than a guess.
+      wrap.innerHTML = `<div class="alt-img-fallback">🌿</div>`;
+    }
   });
 }
 
-// ALTERNATIVES 
+// ─── ALTERNATIVES ─────────────────────────────
 function extractPriceValue(alt) {
   // Prefer the AI-provided numeric priceValue; fall back to parsing the price string.
   if (typeof alt.priceValue === 'number' && !isNaN(alt.priceValue)) {
@@ -739,7 +786,7 @@ function buildAmazonSearchUrl(alt) {
   // We never trust an AI-generated URL — it can hallucinate broken links.
   const query = [alt.name, alt.brand].filter(Boolean).join(' ');
   const encoded = encodeURIComponent(query.trim());
-  const domain = getMarketplace().domain;
+  const domain = getResultMarketplace().domain; // must match the marketplace these prices came from
   return `https://www.${domain}/s?k=${encoded}`;
 }
 
@@ -774,7 +821,7 @@ function renderAlternativeCards(alts) {
         <div class="alt-price">${a.price}</div>
       </div>
       <a class="alt-link" href="${buildAmazonSearchUrl(a)}" target="_blank" rel="noopener noreferrer">
-        Shop on ${getMarketplace().domain} →
+        Shop on ${getResultMarketplace().domain} →
       </a>
     </div>
   `).join('');
@@ -782,7 +829,7 @@ function renderAlternativeCards(alts) {
   loadAlternativeImages(sorted);
 }
 
-// LOADING
+// ─── LOADING ──────────────────────────────────
 function showLoading(show) {
   const overlay = document.getElementById('loadingOverlay');
   if (show) {
@@ -817,7 +864,7 @@ function animateLoadingMessages() {
   }, 1800);
 }
 
-// ERROR TOAST 
+// ─── ERROR TOAST ──────────────────────────────
 function showError(msg) {
   const existing = document.querySelector('.error-toast');
   if (existing) existing.remove();
@@ -829,7 +876,7 @@ function showError(msg) {
   setTimeout(() => toast.remove(), 6000);
 }
 
-// INFO TOAST 
+// ─── INFO TOAST ───────────────────────────────
 function showInfoToast(msg) {
   const existing = document.querySelector('.info-toast');
   if (existing) existing.remove();
@@ -841,7 +888,7 @@ function showInfoToast(msg) {
   setTimeout(() => toast.remove(), 3000);
 }
 
-// RESET
+// ─── RESET ────────────────────────────────────
 function resetApp() {
   currentImageBase64 = null;
   stopWebcam();

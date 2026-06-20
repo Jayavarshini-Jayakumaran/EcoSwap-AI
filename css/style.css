@@ -708,7 +708,7 @@ body {
   position: relative;
   height: 140px;
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -722,6 +722,21 @@ body {
   width: 100%;
   height: 100%;
   background: var(--bg-card);
+}
+
+.alt-img-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-card);
+  padding: 1.2rem;
+}
+
+.alt-img-icon svg {
+  width: 90px;
+  height: 90px;
 }
 
 .alt-img-fallback {
