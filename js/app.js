@@ -1,4 +1,23 @@
 // API CONFIG
+
+// Ask visitor for their API key if config.js not present
+if (typeof CONFIG === 'undefined') {
+  const savedKey = localStorage.getItem('ecoswap_gemini_key');
+  const key = savedKey || prompt(
+    '🌿 EcoSwap AI needs a FREE Gemini API key to work.\n\n' +
+    'Get yours in 30 seconds:\n' +
+    '1. Go to aistudio.google.com\n' +
+    '2. Sign in with Google → Get API Key\n' +
+    '3. Paste it below'
+  );
+  if (key && key.trim()) {
+    localStorage.setItem('ecoswap_gemini_key', key.trim());
+    window.CONFIG = { GEMINI_API_KEY: key.trim() };
+  } else {
+    window.CONFIG = { GEMINI_API_KEY: '' };
+  }
+}
+
 const API_KEY = (typeof CONFIG !== 'undefined' &&
                  CONFIG.GEMINI_API_KEY &&
                  CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
