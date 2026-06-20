@@ -1,8 +1,3 @@
-/* ============================================
-   ECOSWAP AI — CSS
-   Theme: Dark Beige bg, Dark Green borders
-   ============================================ */
-
 :root {
   --bg:           #2b2620;
   --bg-card:      #33302a;
@@ -70,11 +65,35 @@ body {
   color: var(--beige-light);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .tagline {
   font-size: 0.8rem;
   color: var(--green-bright);
   font-family: var(--font-mono);
   letter-spacing: 0.05em;
+}
+
+.marketplace-select {
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 0.82rem;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.marketplace-select:hover,
+.marketplace-select:focus {
+  border-color: var(--green-bright);
+  outline: none;
 }
 
 /* ── INPUT SECTION ── */
@@ -593,6 +612,76 @@ body {
   font-weight: 500;
 }
 
+/* ── PRICE FILTER BAR ── */
+.price-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.8rem 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.price-filter-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.price-filter-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.price-filter-inputs label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.price-filter-inputs input[type="number"] {
+  width: 90px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.price-filter-inputs input[type="number"]:focus {
+  outline: none;
+  border-color: var(--green-bright);
+}
+
+.price-filter-sym {
+  color: var(--green-bright);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.price-filter-inputs .btn-secondary {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+}
+
+.alt-empty {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  padding: 1.5rem;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
 .alternatives-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -619,11 +708,30 @@ body {
   position: relative;
   height: 140px;
   overflow: hidden;
-  background: var(--bg-card);
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   border-bottom: 1.5px solid var(--border);
+}
+
+.alt-img-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-card);
+}
+
+.alt-img-fallback {
+  font-size: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-card);
 }
 
 .alt-img-placeholder {
@@ -642,6 +750,7 @@ body {
   padding: 2px 7px;
   border-radius: 20px;
   letter-spacing: 0.05em;
+  z-index: 2;
 }
 
 .alt-body {
@@ -753,9 +862,15 @@ body {
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
+.info-toast {
+  background: var(--green-dark);
+  border: 1.5px solid var(--green-bright);
+}
+
 /* ── RESPONSIVE ── */
 @media (max-width: 600px) {
-  .site-header { padding: 1rem 1.2rem; }
+  .site-header { padding: 1rem 1.2rem; flex-wrap: wrap; gap: 0.6rem; }
+  .header-right { gap: 0.6rem; }
   .tagline { display: none; }
   .input-card { padding: 1.5rem; }
   .input-heading { font-size: 1.4rem; }
@@ -764,4 +879,5 @@ body {
   .alternatives-grid { grid-template-columns: 1fr; }
   .harm-grid { grid-template-columns: 1fr 1fr; }
   .result-card { padding: 1.3rem; }
+  .price-filter-row { flex-direction: column; align-items: flex-start; }
 }

@@ -1,12 +1,20 @@
-// ─── API CONFIG ───────────────────────────────
-// Load from js/config.js (gitignored). Copy config.example.js → config.js and add your key.
+// API CONFIG
 const API_KEY = (typeof CONFIG !== 'undefined' &&
                  CONFIG.GEMINI_API_KEY &&
                  CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
   ? CONFIG.GEMINI_API_KEY
   : null;
 
-const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+// Pexels powers real product photos for alternatives (free)
+// Get a free key instantly at https://www.pexels.com/api/
+const PEXELS_API_KEY = (typeof CONFIG !== 'undefined' &&
+                 CONFIG.PEXELS_API_KEY &&
+                 CONFIG.PEXELS_API_KEY !== 'your_actual_pexels_api_key_here')
+  ? CONFIG.PEXELS_API_KEY
+  : null;
+
+// Using gemini-1.5-flash (free tier: 1,500 req/day)
+const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
 // ─── STATE ────────────────────────────────────
 let currentImageBase64 = null;
@@ -14,15 +22,65 @@ let currentImageMime   = 'image/jpeg';
 let webcamStream       = null;
 let activeTab          = 'upload';
 let loadingMsgTimer    = null;
+let lastAlternatives   = []; // cached for client-side price filtering, no re-call needed
 
-// ─── INIT ─────────────────────────────────────
+// MARKETPLACE / CURRENCY CONFIG 
+const MARKETPLACES = {
+  IN: { domain: 'amazon.in',  symbol: '₹', code: 'INR', label: 'India (₹ INR)' },
+  US: { domain: 'amazon.com', symbol: '$', code: 'USD', label: 'United States ($ USD)' },
+  UK: { domain: 'amazon.co.uk', symbol: '£', code: 'GBP', label: 'United Kingdom (£ GBP)' },
+  DE: { domain: 'amazon.de', symbol: '€', code: 'EUR', label: 'Germany (€ EUR)' },
+  CA: { domain: 'amazon.ca', symbol: 'CA$', code: 'CAD', label: 'Canada (CA$ CAD)' },
+  AU: { domain: 'amazon.com.au', symbol: 'A$', code: 'AUD', label: 'Australia (A$ AUD)' },
+  JP: { domain: 'amazon.co.jp', symbol: '¥', code: 'JPY', label: 'Japan (¥ JPY)' },
+};
+
+let currentMarketplace = 'IN'; // default per project requirements
+
+function getMarketplace() {
+  return MARKETPLACES[currentMarketplace] || MARKETPLACES.IN;
+}
+
+function setMarketplace(code) {
+  if (MARKETPLACES[code]) {
+    currentMarketplace = code;
+    const sel = document.getElementById('marketplaceSelect');
+    if (sel) sel.value = code;
+  }
+}
+
+// INIT 
 document.addEventListener('DOMContentLoaded', () => {
   initFileUpload();
   updateAnalyzeBtn();
+  initMarketplaceSelector();
   console.log('EcoSwap AI ready. API key loaded:', !!API_KEY);
+  if (!PEXELS_API_KEY) {
+    console.warn('⚠️ No Pexels API key set — product cards will use the Wikimedia fallback (limited coverage) or a leaf icon. Add PEXELS_API_KEY to js/config.js for real photos. Get a free key at https://www.pexels.com/api/');
+  }
 });
 
-// ─── TAB SWITCHING ────────────────────────────
+function initMarketplaceSelector() {
+  const sel = document.getElementById('marketplaceSelect');
+  if (!sel) return;
+  sel.innerHTML = Object.entries(MARKETPLACES)
+    .map(([code, m]) => `<option value="${code}" ${code === currentMarketplace ? 'selected' : ''}>${m.label}</option>`)
+    .join('');
+  sel.addEventListener('change', async e => {
+    currentMarketplace = e.target.value;
+
+    // If results are already showing, prices/links are now stale for the new
+    // marketplace. Re-run analysis against the stored image so prices, the
+    // displayed currency, and the Amazon domain all stay in sync.
+    const resultsVisible = !document.getElementById('resultsSection').classList.contains('hidden');
+    if (resultsVisible && currentImageBase64) {
+      showInfoToast(`Updating prices for ${getMarketplace().label}…`);
+      await analyzeImage();
+    }
+  });
+}
+
+// TAB SWITCHING 
 function switchTab(tab) {
   activeTab = tab;
 
@@ -33,12 +91,11 @@ function switchTab(tab) {
 
   if (tab !== 'webcam' && webcamStream) stopWebcam();
 
-  // Reset image when switching tabs
   currentImageBase64 = null;
   updateAnalyzeBtn();
 }
 
-// ─── FILE UPLOAD ──────────────────────────────
+// FILE UPLOAD
 function initFileUpload() {
   const fileInput = document.getElementById('fileInput');
   const dropZone  = document.getElementById('dropZone');
@@ -87,13 +144,13 @@ function handleFileSelected(file) {
 
 function clearUpload() {
   currentImageBase64 = null;
-  document.getElementById('fileInput').value          = '';
+  document.getElementById('fileInput').value             = '';
   document.getElementById('uploadPreview').style.display = 'none';
   document.getElementById('dropZone').style.display      = 'block';
   updateAnalyzeBtn();
 }
 
-// ─── WEBCAM ───────────────────────────────────
+// WEBCAM
 async function startWebcam() {
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({
@@ -103,8 +160,8 @@ async function startWebcam() {
     const video       = document.getElementById('webcamVideo');
     const placeholder = document.getElementById('webcamPlaceholder');
 
-    video.srcObject      = webcamStream;
-    video.style.display  = 'block';
+    video.srcObject     = webcamStream;
+    video.style.display = 'block';
     if (placeholder) placeholder.style.display = 'none';
 
     document.getElementById('startCamBtn').classList.add('hidden');
@@ -128,12 +185,12 @@ function captureFrame() {
   currentImageBase64     = dataUrl.split(',')[1];
   currentImageMime       = 'image/jpeg';
 
-  const capturedImg      = document.getElementById('capturedImg');
-  const webcamCaptured   = document.getElementById('webcamCaptured');
+  const capturedImg    = document.getElementById('capturedImg');
+  const webcamCaptured = document.getElementById('webcamCaptured');
 
-  capturedImg.src                  = dataUrl;
-  webcamCaptured.style.display     = 'block';
-  video.style.display              = 'none';
+  capturedImg.src              = dataUrl;
+  webcamCaptured.style.display = 'block';
+  video.style.display          = 'none';
 
   stopWebcam();
 
@@ -167,7 +224,7 @@ function updateAnalyzeBtn() {
   if (btn) btn.disabled = !currentImageBase64;
 }
 
-// ─── ANALYZE ──────────────────────────────────
+// ANALYZE
 async function analyzeImage() {
   if (!currentImageBase64) {
     showError('Please upload or capture an image first.');
@@ -180,6 +237,8 @@ async function analyzeImage() {
   }
 
   showLoading(true);
+
+  const market = getMarketplace();
 
   const prompt = `You are an expert environmental scientist and material analyst. Analyze this image and detect any plastic material present.
 
@@ -220,31 +279,49 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
   "emotionalQuote": "If you dropped this bottle on the day dinosaurs went extinct, it would still be here today. Every piece of plastic ever made still exists somewhere on Earth.",
   "alternatives": [
     {
-      "name": "Hydro Flask Water Bottle",
-      "brand": "Hydro Flask",
-      "description": "Insulated stainless steel — keeps drinks cold 24h, hot 12h. Zero plastic.",
-      "price": "~$30–$50",
-      "emoji": "🥤",
-      "badge": "Top Pick",
-      "url": "https://www.amazon.com/s?k=hydro+flask+water+bottle+stainless+steel"
+      "name": "Stasher Reusable Bag",
+      "brand": "Stasher",
+      "description": "Platinum silicone bags — microwave, dishwasher & freezer safe. Replaces 260 plastic bags/year.",
+      "price": "${market.symbol}800–${market.symbol}1200",
+      "priceValue": 1000,
+      "imageQuery": "Stasher reusable silicone bag",
+      "badge": "Best Value"
     },
     {
       "name": "Klean Kanteen Classic",
       "brand": "Klean Kanteen",
       "description": "BPA-free steel bottle, lifetime guarantee. Made from 90% post-consumer recycled steel.",
-      "price": "~$20–$35",
-      "emoji": "♻️",
-      "badge": "Eco Certified",
-      "url": "https://www.amazon.com/s?k=klean+kanteen+stainless+bottle"
+      "price": "${market.symbol}1500–${market.symbol}2200",
+      "priceValue": 1800,
+      "imageQuery": "Klean Kanteen stainless steel water bottle",
+      "badge": "Eco Certified"
     },
     {
-      "name": "Stasher Reusable Bag",
-      "brand": "Stasher",
-      "description": "Platinum silicone bags — microwave, dishwasher & freezer safe. Replaces 260 plastic bags/year.",
-      "price": "~$10–$20",
-      "emoji": "🌿",
-      "badge": "Best Value",
-      "url": "https://www.amazon.com/s?k=stasher+reusable+silicone+bags"
+      "name": "Hydro Flask Water Bottle",
+      "brand": "Hydro Flask",
+      "description": "Insulated stainless steel — keeps drinks cold 24h, hot 12h. Zero plastic.",
+      "price": "${market.symbol}2500–${market.symbol}3500",
+      "priceValue": 3000,
+      "imageQuery": "Hydro Flask insulated water bottle",
+      "badge": "Top Pick"
+    },
+    {
+      "name": "S'well Stainless Steel Bottle",
+      "brand": "S'well",
+      "description": "Triple-walled insulation, leak-proof, no condensation. Wide range of colors.",
+      "price": "${market.symbol}2800–${market.symbol}3800",
+      "priceValue": 3300,
+      "imageQuery": "S'well stainless steel water bottle",
+      "badge": "Stylish Pick"
+    },
+    {
+      "name": "Larq Self-Cleaning Bottle",
+      "brand": "Larq",
+      "description": "UV-C self-cleaning technology kills 99% of bacteria. Premium insulated steel.",
+      "price": "${market.symbol}6000–${market.symbol}8000",
+      "priceValue": 7000,
+      "imageQuery": "Larq self cleaning water bottle",
+      "badge": "Premium"
     }
   ]
 }
@@ -254,9 +331,14 @@ If NO plastic is visible, return:
 
 RULES:
 - Tailor ALL fields to the actual plastic detected in the image
+- Provide exactly 5 alternatives, covering a spread from budget to premium
 - Match alternatives to the item type (bottle→reusable bottles, bag→reusable bags, etc.)
+- ALL prices must be realistic for the ${market.label} marketplace, shown with the "${market.symbol}" symbol and currency code ${market.code}
+- Every alternative MUST include "priceValue": a plain number (no symbol, no range) representing the approximate average/mid price in ${market.code}, used for sorting low to high
+- Every alternative MUST include "imageQuery": a short 3-5 word search term (brand + product type) used to look up a real product photo — do NOT include an emoji field
 - emotionalQuote must be vivid and human
 - impactHeadline must be punchy and emotionally resonant
+- Do NOT include a "url" field for alternatives — that is generated separately
 - Return ONLY raw JSON, nothing else`;
 
   try {
@@ -276,7 +358,16 @@ RULES:
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error ${response.status}`);
+      const errMsg = err.error?.message || `API error ${response.status}`;
+
+      // Friendly quota error message
+      if (response.status === 429 || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+        showLoading(false);
+        showQuotaError();
+        return;
+      }
+
+      throw new Error(errMsg);
     }
 
     const data = await response.json();
@@ -304,17 +395,83 @@ RULES:
   } catch (err) {
     showLoading(false);
     console.error('Analysis error:', err);
-    showError('Analysis failed: ' + err.message);
+
+    if (err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('exceeded')) {
+      showQuotaError();
+    } else {
+      showError('Analysis failed: ' + err.message);
+    }
   }
 }
 
-// ─── RENDER RESULTS ───────────────────────────
+// QUOTA ERROR MODAL 
+function showQuotaError() {
+  // Remove existing modal if any
+  const existing = document.getElementById('quotaModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'quotaModal';
+  modal.style.cssText = `
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(43,38,32,0.92);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+    padding: 1.5rem;
+  `;
+  modal.innerHTML = `
+    <div style="
+      background: #33302a;
+      border: 1.5px solid #2d5a27;
+      border-radius: 10px;
+      padding: 2rem;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      font-family: 'Space Grotesk', sans-serif;
+    ">
+      <div style="font-size: 2.5rem; margin-bottom: 1rem;">⚠️</div>
+      <h2 style="color: #e8dcc8; font-size: 1.3rem; margin-bottom: 0.6rem;">Gemini API Quota Exceeded</h2>
+      <p style="color: #b8a48a; font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem;">
+        Your free Gemini API key has hit its daily or per-minute limit.<br><br>
+        <strong style="color:#e8dcc8;">To fix this, do one of the following:</strong>
+      </p>
+      <div style="text-align:left; display:flex; flex-direction:column; gap:0.8rem; margin-bottom:1.5rem;">
+        <div style="background:#3a362f; border:1.5px solid #2d5a27; border-radius:6px; padding:0.9rem;">
+          <div style="color:#5aad4e; font-size:0.8rem; font-family:'Space Mono',monospace; margin-bottom:0.3rem;">OPTION 1 — WAIT</div>
+          <div style="color:#e8dcc8; font-size:0.88rem;">Free tier resets every minute (15 RPM) and daily (1,500/day). Wait a minute and try again.</div>
+        </div>
+        <div style="background:#3a362f; border:1.5px solid #2d5a27; border-radius:6px; padding:0.9rem;">
+          <div style="color:#5aad4e; font-size:0.8rem; font-family:'Space Mono',monospace; margin-bottom:0.3rem;">OPTION 2 — NEW API KEY</div>
+          <div style="color:#e8dcc8; font-size:0.88rem;">Generate a fresh free key at <a href="https://aistudio.google.com" target="_blank" style="color:#5aad4e;">aistudio.google.com</a> and update <code style="background:#2b2620;padding:1px 5px;border-radius:3px;">js/config.js</code>.</div>
+        </div>
+        <div style="background:#3a362f; border:1.5px solid #2d5a27; border-radius:6px; padding:0.9rem;">
+          <div style="color:#5aad4e; font-size:0.8rem; font-family:'Space Mono',monospace; margin-bottom:0.3rem;">OPTION 3 — UPGRADE</div>
+          <div style="color:#e8dcc8; font-size:0.88rem;">Enable billing in Google AI Studio for higher limits (pay-per-use, very cheap).</div>
+        </div>
+      </div>
+      <button onclick="document.getElementById('quotaModal').remove()" style="
+        background: #2d5a27;
+        border: 1.5px solid #5aad4e;
+        color: #e8dcc8;
+        padding: 0.65rem 1.8rem;
+        border-radius: 6px;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+      ">Got it, I'll fix it</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+// RENDER RESULTS
 function renderResults(r) {
   document.getElementById('inputSection').classList.add('hidden');
   document.getElementById('resultsSection').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Detection card
   document.getElementById('plasticCode').textContent     = r.recyclingCode || r.plasticCode || '?';
   document.getElementById('plasticName').textContent     = r.plasticName    || 'Unknown';
   document.getElementById('plasticFullName').textContent = r.plasticFullName || '';
@@ -358,7 +515,6 @@ function renderResults(r) {
     </div>
   `;
 
-  // Impact card
   document.getElementById('impactHeadline').textContent = r.impactHeadline || '';
   renderTimeline(r.decompositionYears, r.timelineEvents || []);
 
@@ -380,11 +536,11 @@ function renderResults(r) {
 
   document.getElementById('emotionalQuote').textContent = r.emotionalQuote || '';
 
-  // Alternatives
-  renderAlternatives(r.alternatives || []);
+  lastAlternatives = r.alternatives || [];
+  renderAlternatives(lastAlternatives);
 }
 
-// ─── TIMELINE ─────────────────────────────────
+// TIMELINE
 function renderTimeline(years, events) {
   const track = document.getElementById('timelineTrack');
 
@@ -427,12 +583,188 @@ function renderTimeline(years, events) {
   `;
 }
 
-// ─── ALTERNATIVES ─────────────────────────────
+// PRICE FILTER
+let priceFilterMin = null;
+let priceFilterMax = null;
+
+function renderPriceFilterBar(alts) {
+  const bar = document.getElementById('priceFilterBar');
+  if (!bar) return;
+
+  if (!alts.length) {
+    bar.innerHTML = '';
+    return;
+  }
+
+  const values = alts.map(extractPriceValue).filter(v => isFinite(v));
+  const lo = Math.floor(Math.min(...values));
+  const hi = Math.ceil(Math.max(...values));
+  const sym = getMarketplace().symbol;
+
+  if (priceFilterMin === null) priceFilterMin = lo;
+  if (priceFilterMax === null) priceFilterMax = hi;
+
+  bar.innerHTML = `
+    <div class="price-filter-row">
+      <span class="price-filter-label">Filter by price</span>
+      <div class="price-filter-inputs">
+        <label>
+          Min
+          <input type="number" id="priceMinInput" value="${priceFilterMin}" min="${lo}" max="${hi}" />
+        </label>
+        <span class="price-filter-sym">${sym}</span>
+        <label>
+          Max
+          <input type="number" id="priceMaxInput" value="${priceFilterMax}" min="${lo}" max="${hi}" />
+        </label>
+        <span class="price-filter-sym">${sym}</span>
+        <button class="btn-secondary" id="priceFilterReset" type="button">Reset</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('priceMinInput').addEventListener('input', e => {
+    priceFilterMin = e.target.value === '' ? lo : Number(e.target.value);
+    filterAndRenderCards();
+  });
+  document.getElementById('priceMaxInput').addEventListener('input', e => {
+    priceFilterMax = e.target.value === '' ? hi : Number(e.target.value);
+    filterAndRenderCards();
+  });
+  document.getElementById('priceFilterReset').addEventListener('click', () => {
+    priceFilterMin = lo;
+    priceFilterMax = hi;
+    renderPriceFilterBar(lastAlternatives);
+    filterAndRenderCards();
+  });
+}
+
+function filterAndRenderCards() {
+  const min = priceFilterMin ?? -Infinity;
+  const max = priceFilterMax ?? Infinity;
+  const filtered = lastAlternatives.filter(a => {
+    const v = extractPriceValue(a);
+    return v >= min && v <= max;
+  });
+  renderAlternativeCards(filtered);
+}
+
+// PRODUCT IMAGES (real photos)
+const productImageCache = {}; // memoize by query within this session
+
+async function fetchFromPexels(query) {
+  if (!PEXELS_API_KEY) return null;
+  const res = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=1&orientation=square`, {
+    headers: { Authorization: PEXELS_API_KEY }
+  });
+  if (!res.ok) throw new Error(`Pexels error ${res.status}`);
+  const data = await res.json();
+  return data?.photos?.[0]?.src?.medium || null;
+}
+
+async function fetchFromWikimedia(query) {
+  // Fallback only — Commons rarely has true commercial product photography,
+  // but it costs nothing and needs no key, so it's a reasonable last resort.
+  const searchUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=1&prop=imageinfo&iiprop=url&iiurlwidth=400`;
+  const res = await fetch(searchUrl);
+  if (!res.ok) throw new Error('Wikimedia search failed');
+  const data = await res.json();
+  const pages = data?.query?.pages;
+  if (!pages) return null;
+  const page = Object.values(pages)[0];
+  return page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url || null;
+}
+
+async function fetchProductImage(query) {
+  if (!query) return null;
+  if (productImageCache[query] !== undefined) return productImageCache[query];
+
+  let url = null;
+  try {
+    url = await fetchFromPexels(query);
+  } catch (e) {
+    console.warn('Pexels lookup failed for', query, e);
+  }
+
+  if (!url) {
+    try {
+      url = await fetchFromWikimedia(query);
+    } catch (e) {
+      console.warn('Wikimedia fallback failed for', query, e);
+    }
+  }
+
+  productImageCache[query] = url;
+  return url;
+}
+
+function altCardImageId(idx) {
+  return `altImg_${idx}`;
+}
+
+async function loadAlternativeImages(sorted) {
+  // Fire all lookups in parallel, swap each <img> in as it resolves.
+  sorted.forEach((alt, idx) => {
+    const query = alt.imageQuery || [alt.brand, alt.name].filter(Boolean).join(' ');
+    fetchProductImage(query).then(url => {
+      const wrap = document.getElementById(altCardImageId(idx));
+      if (!wrap) return;
+      if (url) {
+        wrap.innerHTML = `<img src="${url}" alt="${alt.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;background:#fff;" onerror="this.parentElement.innerHTML='<div class=\\'alt-img-fallback\\'>🌿</div>'" />`;
+      } else {
+        wrap.innerHTML = `<div class="alt-img-fallback">🌿</div>`;
+      }
+    });
+  });
+}
+
+// ALTERNATIVES 
+function extractPriceValue(alt) {
+  // Prefer the AI-provided numeric priceValue; fall back to parsing the price string.
+  if (typeof alt.priceValue === 'number' && !isNaN(alt.priceValue)) {
+    return alt.priceValue;
+  }
+  const nums = (alt.price || '').match(/[\d.]+/g);
+  if (!nums) return Infinity;
+  const vals = nums.map(Number);
+  return vals.reduce((a, b) => a + b, 0) / vals.length; // average if range
+}
+
+function sortAlternativesByPrice(alts) {
+  return [...alts].sort((a, b) => extractPriceValue(a) - extractPriceValue(b));
+}
+
+function buildAmazonSearchUrl(alt) {
+  // Build the search query from name + brand for the most relevant results.
+  // We never trust an AI-generated URL — it can hallucinate broken links.
+  const query = [alt.name, alt.brand].filter(Boolean).join(' ');
+  const encoded = encodeURIComponent(query.trim());
+  const domain = getMarketplace().domain;
+  return `https://www.${domain}/s?k=${encoded}`;
+}
+
 function renderAlternatives(alts) {
-  document.getElementById('alternativesGrid').innerHTML = alts.map(a => `
+  priceFilterMin = null; // reset range for a fresh analysis
+  priceFilterMax = null;
+  renderPriceFilterBar(alts);
+  filterAndRenderCards();
+}
+
+function renderAlternativeCards(alts) {
+  const sorted = sortAlternativesByPrice(alts);
+  const grid = document.getElementById('alternativesGrid');
+
+  if (!sorted.length) {
+    grid.innerHTML = `<p class="alt-empty">No alternatives in this price range. Try widening the filter.</p>`;
+    return;
+  }
+
+  grid.innerHTML = sorted.map((a, idx) => `
     <div class="alt-card">
-      <div class="alt-img-wrap">
-        <div class="alt-img-placeholder">${a.emoji || '🌿'}</div>
+      <div class="alt-img-wrap" id="${altCardImageId(idx)}">
+        <div class="alt-img-loading">
+          <span class="spinner" style="width:22px;height:22px;"></span>
+        </div>
         ${a.badge ? `<div class="alt-badge">${a.badge}</div>` : ''}
       </div>
       <div class="alt-body">
@@ -441,14 +773,16 @@ function renderAlternatives(alts) {
         <div class="alt-desc">${a.description}</div>
         <div class="alt-price">${a.price}</div>
       </div>
-      <a class="alt-link" href="${a.url}" target="_blank" rel="noopener noreferrer">
-        Shop on Amazon →
+      <a class="alt-link" href="${buildAmazonSearchUrl(a)}" target="_blank" rel="noopener noreferrer">
+        Shop on ${getMarketplace().domain} →
       </a>
     </div>
   `).join('');
+
+  loadAlternativeImages(sorted);
 }
 
-// ─── LOADING ──────────────────────────────────
+// LOADING
 function showLoading(show) {
   const overlay = document.getElementById('loadingOverlay');
   if (show) {
@@ -483,9 +817,8 @@ function animateLoadingMessages() {
   }, 1800);
 }
 
-// ─── ERROR TOAST ──────────────────────────────
+// ERROR TOAST 
 function showError(msg) {
-  // Remove any existing toast first
   const existing = document.querySelector('.error-toast');
   if (existing) existing.remove();
 
@@ -496,18 +829,33 @@ function showError(msg) {
   setTimeout(() => toast.remove(), 6000);
 }
 
-// ─── RESET ────────────────────────────────────
+// INFO TOAST 
+function showInfoToast(msg) {
+  const existing = document.querySelector('.info-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className   = 'error-toast info-toast';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// RESET
 function resetApp() {
   currentImageBase64 = null;
   stopWebcam();
+  lastAlternatives = [];
+  priceFilterMin = null;
+  priceFilterMax = null;
 
   document.getElementById('resultsSection').classList.add('hidden');
   document.getElementById('inputSection').classList.remove('hidden');
 
   clearUpload();
 
-  const webcamCaptured  = document.getElementById('webcamCaptured');
-  const webcamVideo     = document.getElementById('webcamVideo');
+  const webcamCaptured    = document.getElementById('webcamCaptured');
+  const webcamVideo       = document.getElementById('webcamVideo');
   const webcamPlaceholder = document.getElementById('webcamPlaceholder');
 
   webcamCaptured.style.display = 'none';
@@ -518,7 +866,6 @@ function resetApp() {
   document.getElementById('captureBtn').classList.add('hidden');
   document.getElementById('retakeBtn').classList.add('hidden');
 
-  // Reset confidence bar
   document.getElementById('confBar').style.width = '0%';
 
   switchTab('upload');

@@ -15,7 +15,10 @@
       <span class="logo-icon">♻</span>
       <span class="logo-text">EcoSwap AI</span>
     </div>
-    <p class="tagline">Scan. Understand. Choose Better.</p>
+    <div class="header-right">
+      <p class="tagline">Scan. Understand. Choose Better.</p>
+      <select class="marketplace-select" id="marketplaceSelect" title="Amazon marketplace & currency"></select>
+    </div>
   </header>
 
   <!-- HERO / INPUT SECTION -->
@@ -125,6 +128,7 @@
       <div class="result-card" id="alternativesCard">
         <div class="card-eyebrow">Sustainable Alternatives</div>
         <h3 class="alt-heading">Switch to these instead</h3>
+        <div id="priceFilterBar"></div>
         <div class="alternatives-grid" id="alternativesGrid"></div>
       </div>
 
@@ -150,7 +154,7 @@
   </main>
 
   <footer class="site-footer">
-    <p>EcoSwap AI uses Gemini AI for analysis. Alternative links are AI-suggested — verify before purchase.</p>
+    <p>EcoSwap AI uses Gemini AI for analysis. Alternative links are AI-suggested — verify before purchase. Product photos via Wikimedia Commons.</p>
   </footer>
 
   <!-- config.js must load BEFORE app.js — copy config.example.js → config.js and add your key -->
