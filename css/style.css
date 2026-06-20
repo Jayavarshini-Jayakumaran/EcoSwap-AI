@@ -34,7 +34,7 @@ body {
   line-height: 1.6;
 }
 
-/* ── HEADER ── */
+/* HEADER */
 .site-header {
   display: flex;
   align-items: center;
@@ -96,7 +96,7 @@ body {
   outline: none;
 }
 
-/* ── INPUT SECTION ── */
+/* INPUT SECTION */
 .input-section {
   display: flex;
   justify-content: center;
@@ -129,7 +129,7 @@ body {
   margin-bottom: 2rem;
 }
 
-/* ── TABS ── */
+/* TABS */
 .input-tabs {
   display: flex;
   gap: 0.5rem;
@@ -162,11 +162,11 @@ body {
   font-weight: 600;
 }
 
-/* ── TAB PANELS ── */
+/* TAB PANELS */
 .tab-panel { display: block; }
 .tab-panel.hidden { display: none; }
 
-/* ── DROP ZONE ── */
+/* DROP ZONE */
 .drop-zone {
   border: 2px dashed var(--border-mid);
   border-radius: var(--radius);
@@ -188,7 +188,7 @@ body {
 .drop-text  { font-size: 1rem; color: var(--text-primary); margin-bottom: 0.25rem; }
 .drop-sub   { font-size: 0.8rem; color: var(--text-dim); }
 
-/* ── UPLOAD PREVIEW ── */
+/* UPLOAD PREVIEW */
 .preview-wrap {
   position: relative;
   border: 1.5px solid var(--border);
@@ -219,7 +219,7 @@ body {
 
 .clear-btn:hover { border-color: var(--red-harm); color: #e74c3c; }
 
-/* ── WEBCAM ── */
+/* WEBCAM */
 .webcam-wrap {
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -245,7 +245,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* ── BUTTONS ── */
+/* BUTTONS */
 .btn-primary {
   background: var(--green-dark);
   border: 1.5px solid var(--green-bright);
@@ -309,7 +309,7 @@ body {
   cursor: not-allowed;
 }
 
-/* ── SPINNER ── */
+/* SPINNER */
 .spinner {
   width: 18px; height: 18px;
   border: 2px solid rgba(255,255,255,0.2);
@@ -323,7 +323,7 @@ body {
 
 .hidden { display: none !important; }
 
-/* ── RESULTS SECTION ── */
+/* RESULTS SECTION */
 .results-section {
   max-width: 860px;
   margin: 0 auto;
@@ -335,7 +335,7 @@ body {
 
 .results-section.hidden { display: none; }
 
-/* ── RESULT CARD ── */
+/* RESULT CARD */
 .result-card {
   background: var(--bg-card);
   border: 1.5px solid var(--border);
@@ -355,7 +355,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-/* ── PLASTIC IDENTITY ── */
+/* PLASTIC IDENTITY */
 .plastic-identity {
   display: flex;
   align-items: flex-start;
@@ -427,7 +427,7 @@ body {
   min-width: 40px;
 }
 
-/* ── DETAILS GRID ── */
+/* DETAILS GRID */
 .details-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -460,7 +460,7 @@ body {
 .detail-value.warn   { color: var(--amber); }
 .detail-value.safe   { color: var(--green-bright); }
 
-/* ── IMPACT CARD ── */
+/* IMPACT CARD */
 .impact-card { border-color: var(--green-dark); }
 
 .impact-headline {
@@ -604,7 +604,7 @@ body {
   font-style: italic;
 }
 
-/* ── ALTERNATIVES ── */
+/* ALTERNATIVES */
 .alt-heading {
   font-size: 1.1rem;
   color: var(--beige-mid);
@@ -612,7 +612,7 @@ body {
   font-weight: 500;
 }
 
-/* ── PRICE FILTER BAR ── */
+/* PRICE FILTER BAR */
 .price-filter-row {
   display: flex;
   align-items: center;
@@ -796,7 +796,7 @@ body {
 
 .alt-link:hover { background: var(--green-mid); }
 
-/* ── LOADING OVERLAY ── */
+/* LOADING OVERLAY */
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -838,7 +838,7 @@ body {
 .lm.done   { color: var(--green-bright); }
 .lm.done::before { content: '✓ '; }
 
-/* ── SCAN AGAIN ── */
+/* SCAN AGAIN */
 .scan-again-wrap {
   display: flex;
   justify-content: center;
@@ -847,7 +847,7 @@ body {
 
 .scan-again-wrap .btn-analyze { max-width: 300px; }
 
-/* ── FOOTER ── */
+/* FOOTER */
 .site-footer {
   border-top: 1px solid var(--border);
   text-align: center;
@@ -856,7 +856,7 @@ body {
   color: var(--text-dim);
 }
 
-/* ── ERROR STATE ── */
+/* ERROR STATE */
 .error-toast {
   position: fixed;
   bottom: 1.5rem; left: 50%;
@@ -882,7 +882,7 @@ body {
   border: 1.5px solid var(--green-bright);
 }
 
-/* ── RESPONSIVE ── */
+/* RESPONSIVE */
 @media (max-width: 600px) {
   .site-header { padding: 1rem 1.2rem; flex-wrap: wrap; gap: 0.6rem; }
   .header-right { gap: 0.6rem; }

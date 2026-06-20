@@ -1,17 +1,13 @@
-// ─── API CONFIG ───────────────────────────────
+// API CONFIG
 const API_KEY = (typeof CONFIG !== 'undefined' &&
                  CONFIG.GEMINI_API_KEY &&
                  CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
   ? CONFIG.GEMINI_API_KEY
   : null;
 
-// Note: product images are hand-built SVG icons (see CATEGORY_ICONS below),
-// not a live photo search — so no image API key is needed.
-
-// Using gemini-1.5-flash (free tier: 1,500 req/day) instead of gemini-2.0-flash
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
-// ─── STATE ────────────────────────────────────
+// STATE
 let currentImageBase64 = null;
 let currentImageMime   = 'image/jpeg';
 let webcamStream       = null;
@@ -21,7 +17,7 @@ let lastAlternatives    = []; // cached for client-side price filtering, no re-c
 let analysisRequestId   = 0;  // guards against stale async responses overwriting newer ones
 let resultMarketplaceCode = 'IN'; // marketplace that generated the CURRENTLY DISPLAYED prices/links
 
-// ─── MARKETPLACE / CURRENCY CONFIG ────────────
+// MARKETPLACE / CURRENCY CONFIG
 const MARKETPLACES = {
   IN: { domain: 'amazon.in',  symbol: '₹', code: 'INR', label: 'India (₹ INR)' },
   US: { domain: 'amazon.com', symbol: '$', code: 'USD', label: 'United States ($ USD)' },
@@ -32,16 +28,13 @@ const MARKETPLACES = {
   JP: { domain: 'amazon.co.jp', symbol: '¥', code: 'JPY', label: 'Japan (¥ JPY)' },
 };
 
-let currentMarketplace = 'IN'; // default per project requirements
+let currentMarketplace = 'IN'; 
 
 function getMarketplace() {
   return MARKETPLACES[currentMarketplace] || MARKETPLACES.IN;
 }
 
 function getResultMarketplace() {
-  // Use this anywhere we're displaying/linking data tied to an already-rendered
-  // result set (price symbol, Amazon domain) — NOT the live dropdown value,
-  // which may have changed again before a new analysis finished.
   return MARKETPLACES[resultMarketplaceCode] || MARKETPLACES.IN;
 }
 
@@ -53,7 +46,7 @@ function setMarketplace(code) {
   }
 }
 
-// ─── INIT ─────────────────────────────────────
+// INIT
 document.addEventListener('DOMContentLoaded', () => {
   initFileUpload();
   updateAnalyzeBtn();
@@ -81,7 +74,7 @@ function initMarketplaceSelector() {
   });
 }
 
-// ─── TAB SWITCHING ────────────────────────────
+// TAB SWITCHING
 function switchTab(tab) {
   activeTab = tab;
 
@@ -96,7 +89,7 @@ function switchTab(tab) {
   updateAnalyzeBtn();
 }
 
-// ─── FILE UPLOAD ──────────────────────────────
+// FILE UPLOAD 
 function initFileUpload() {
   const fileInput = document.getElementById('fileInput');
   const dropZone  = document.getElementById('dropZone');
@@ -151,7 +144,7 @@ function clearUpload() {
   updateAnalyzeBtn();
 }
 
-// ─── WEBCAM ───────────────────────────────────
+// WEBCAM
 async function startWebcam() {
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({
@@ -225,7 +218,7 @@ function updateAnalyzeBtn() {
   if (btn) btn.disabled = !currentImageBase64;
 }
 
-// ─── ANALYZE ──────────────────────────────────
+// ANALYZE 
 async function analyzeImage() {
   if (!currentImageBase64) {
     showError('Please upload or capture an image first.');
@@ -412,7 +405,7 @@ RULES:
   }
 }
 
-// ─── QUOTA ERROR MODAL ────────────────────────
+// QUOTA ERROR MODAL 
 function showQuotaError() {
   // Remove existing modal if any
   const existing = document.getElementById('quotaModal');
@@ -474,7 +467,7 @@ function showQuotaError() {
   document.body.appendChild(modal);
 }
 
-// ─── RENDER RESULTS ───────────────────────────
+// RENDER RESULTS
 function renderResults(r, marketplaceCode) {
   resultMarketplaceCode = marketplaceCode || currentMarketplace; // pin the marketplace these results belong to
   document.getElementById('inputSection').classList.add('hidden');
@@ -549,7 +542,7 @@ function renderResults(r, marketplaceCode) {
   renderAlternatives(lastAlternatives);
 }
 
-// ─── TIMELINE ─────────────────────────────────
+// TIMELINE
 function renderTimeline(years, events) {
   const track = document.getElementById('timelineTrack');
 
@@ -592,7 +585,7 @@ function renderTimeline(years, events) {
   `;
 }
 
-// ─── PRICE FILTER ──────────────────────────────
+// PRICE FILTER 
 let priceFilterMin = null;
 let priceFilterMax = null;
 
@@ -658,13 +651,7 @@ function filterAndRenderCards() {
   renderAlternativeCards(filtered);
 }
 
-// ─── PRODUCT VISUALS (hand-built SVG icons) ────
-// Live photo search (Pexels, Wikimedia) kept returning mismatched images —
-// e.g. a perfume spray bottle for "water bottle" — because nothing could
-// verify what was actually IN a search result before showing it. Rather than
-// trust another guess, each category below is a hand-built SVG illustration,
-// so it is structurally guaranteed to match its label — there's no search
-// step left to get wrong.
+// PRODUCT VISUALS (hand-built SVG icons)
 const CATEGORY_ICONS = {
   steel_water_bottle: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
     <rect x="40" y="8" width="20" height="10" rx="2" fill="var(--beige-mid)"/>
@@ -759,13 +746,13 @@ function loadAlternativeImages(sorted) {
     if (icon) {
       wrap.innerHTML = `<div class="alt-img-icon">${icon}</div>`;
     } else {
-      // Unrecognized/missing category — honest fallback rather than a guess.
+      // Unrecognized/missing category — fallback
       wrap.innerHTML = `<div class="alt-img-fallback">🌿</div>`;
     }
   });
 }
 
-// ─── ALTERNATIVES ─────────────────────────────
+// ALTERNATIVES
 function extractPriceValue(alt) {
   // Prefer the AI-provided numeric priceValue; fall back to parsing the price string.
   if (typeof alt.priceValue === 'number' && !isNaN(alt.priceValue)) {
@@ -783,7 +770,6 @@ function sortAlternativesByPrice(alts) {
 
 function buildAmazonSearchUrl(alt) {
   // Build the search query from name + brand for the most relevant results.
-  // We never trust an AI-generated URL — it can hallucinate broken links.
   const query = [alt.name, alt.brand].filter(Boolean).join(' ');
   const encoded = encodeURIComponent(query.trim());
   const domain = getResultMarketplace().domain; // must match the marketplace these prices came from
@@ -791,7 +777,7 @@ function buildAmazonSearchUrl(alt) {
 }
 
 function renderAlternatives(alts) {
-  priceFilterMin = null; // reset range for a fresh analysis
+  priceFilterMin = null; 
   priceFilterMax = null;
   renderPriceFilterBar(alts);
   filterAndRenderCards();
@@ -829,7 +815,7 @@ function renderAlternativeCards(alts) {
   loadAlternativeImages(sorted);
 }
 
-// ─── LOADING ──────────────────────────────────
+// LOADING
 function showLoading(show) {
   const overlay = document.getElementById('loadingOverlay');
   if (show) {
@@ -864,7 +850,7 @@ function animateLoadingMessages() {
   }, 1800);
 }
 
-// ─── ERROR TOAST ──────────────────────────────
+// ERROR TOAST
 function showError(msg) {
   const existing = document.querySelector('.error-toast');
   if (existing) existing.remove();
@@ -876,7 +862,7 @@ function showError(msg) {
   setTimeout(() => toast.remove(), 6000);
 }
 
-// ─── INFO TOAST ───────────────────────────────
+// INFO TOAST
 function showInfoToast(msg) {
   const existing = document.querySelector('.info-toast');
   if (existing) existing.remove();
@@ -888,7 +874,7 @@ function showInfoToast(msg) {
   setTimeout(() => toast.remove(), 3000);
 }
 
-// ─── RESET ────────────────────────────────────
+// RESET
 function resetApp() {
   currentImageBase64 = null;
   stopWebcam();
