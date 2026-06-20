@@ -11,8 +11,6 @@ Detects plastic from photos or webcam, shows environmental impact with emotional
   </a>
 </p>
 
-> 🎬 Replace `YOUR_VIDEO_ID` in the two links above with your actual YouTube video ID once it's uploaded (the part after `watch?v=` in the URL).
-
 ---
 
 ## ⚡ Quick Start
