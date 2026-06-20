@@ -20,5 +20,5 @@
 
 const CONFIG = {
   GEMINI_API_KEY: 'your_actual_gemini_api_key_here',
-  
+  PEXELS_API_KEY: 'your_actual_pexels_api_key_here'
 };
