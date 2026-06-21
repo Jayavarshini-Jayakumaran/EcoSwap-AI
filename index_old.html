@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PlastiQ — See What You're Really Holding</title>
+  <title>EcoSwap AI — See What You're Really Holding</title>
   <link rel="stylesheet" href="css/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -13,9 +13,12 @@
   <header class="site-header">
     <div class="logo">
       <span class="logo-icon">♻</span>
-      <span class="logo-text">PlastiQ</span>
+      <span class="logo-text">EcoSwap AI</span>
     </div>
-    <p class="tagline">Scan. Understand. Choose Better.</p>
+    <div class="header-right">
+      <p class="tagline">Scan. Understand. Choose Better.</p>
+      <select class="marketplace-select" id="marketplaceSelect" title="Amazon marketplace & currency"></select>
+    </div>
   </header>
 
   <!-- HERO / INPUT SECTION -->
@@ -47,10 +50,13 @@
         <!-- Webcam Panel -->
         <div class="tab-panel hidden" id="panelWebcam">
           <div class="webcam-wrap">
-            <video id="webcamVideo" autoplay playsinline></video>
+            <video id="webcamVideo" autoplay playsinline style="display:none;"></video>
             <canvas id="webcamCanvas" style="display:none;"></canvas>
-            <div class="webcam-captured" id="webcamCaptured" style="display:none;">
-              <img id="capturedImg" src="" alt="Captured" />
+            <div id="webcamCaptured" style="display:none;">
+              <img id="capturedImg" src="" alt="Captured" style="width:100%;max-height:300px;object-fit:cover;display:block;" />
+            </div>
+            <div id="webcamPlaceholder" style="color:#7a6e5e;font-size:0.9rem;padding:2rem;text-align:center;">
+              Click "Start Camera" to begin
             </div>
           </div>
           <div class="webcam-controls">
@@ -89,10 +95,7 @@
             </div>
           </div>
         </div>
-
-        <div class="details-grid" id="detailsGrid">
-          <!-- filled by JS -->
-        </div>
+        <div class="details-grid" id="detailsGrid"></div>
       </div>
 
       <!-- EMOTIONAL IMPACT CARD -->
@@ -100,7 +103,6 @@
         <div class="card-eyebrow">Planet Impact</div>
         <h3 class="impact-headline" id="impactHeadline">—</h3>
 
-        <!-- Timeline visualizer -->
         <div class="timeline-section">
           <div class="timeline-label">Decomposition Timeline</div>
           <div class="timeline-track" id="timelineTrack">
@@ -109,12 +111,8 @@
           <div class="timeline-legend" id="timelineLegend"></div>
         </div>
 
-        <!-- Harm stats -->
-        <div class="harm-grid" id="harmGrid">
-          <!-- filled by JS -->
-        </div>
+        <div class="harm-grid" id="harmGrid"></div>
 
-        <!-- Animal impact -->
         <div class="animal-impact" id="animalImpact">
           <div class="animal-icon" id="animalIcon">🐢</div>
           <div class="animal-text">
@@ -123,19 +121,15 @@
           </div>
         </div>
 
-        <!-- Emotional sentence -->
-        <div class="emotional-quote" id="emotionalQuote">
-          <!-- filled by JS -->
-        </div>
+        <div class="emotional-quote" id="emotionalQuote"></div>
       </div>
 
       <!-- ALTERNATIVES CARD -->
       <div class="result-card" id="alternativesCard">
         <div class="card-eyebrow">Sustainable Alternatives</div>
         <h3 class="alt-heading">Switch to these instead</h3>
-        <div class="alternatives-grid" id="alternativesGrid">
-          <!-- filled by JS -->
-        </div>
+        <div id="priceFilterBar"></div>
+        <div class="alternatives-grid" id="alternativesGrid"></div>
       </div>
 
       <!-- SCAN AGAIN -->
@@ -149,20 +143,22 @@
     <div class="loading-overlay hidden" id="loadingOverlay">
       <div class="loading-box">
         <div class="loading-ring"></div>
-        <div class="loading-messages" id="loadingMessages">
-          <p class="lm active" id="lm1">🔬 Verifying object is plastic…</p>
-          <p class="lm" id="lm2">🧬 Identifying plastic type & properties…</p>
-          <p class="lm" id="lm3">🌍 Calculating environmental impact…</p>
-          <p class="lm" id="lm4">🛒 Finding sustainable alternatives…</p>
+        <div class="loading-messages">
+          <p class="lm active" id="lm1">🔬 Identifying plastic polymer…</p>
+          <p class="lm" id="lm2">🌍 Calculating environmental impact…</p>
+          <p class="lm" id="lm3">🛒 Finding sustainable alternatives…</p>
+          <p class="lm" id="lm4">📊 Building your impact story…</p>
         </div>
       </div>
     </div>
   </main>
 
   <footer class="site-footer">
-    <p>PlastiQ uses Claude AI for analysis. Alternative links are AI-suggested — verify before purchase.</p>
+    <p>EcoSwap AI uses Gemini AI for analysis. Alternative links are AI-suggested — verify before purchase. Product photos via Wikimedia Commons.</p>
   </footer>
 
+  <!-- config.js must load BEFORE app.js — copy config.example.js → config.js and add your key -->
+  <script src="js/config.js" onerror="console.warn('⚠️ js/config.js not found. Copy js/config.example.js → js/config.js and add your Gemini API key.')"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
