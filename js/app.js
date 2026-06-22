@@ -2,10 +2,10 @@
    ECOSWAP AI — app.js
    Gemini 2.0 Flash via Google AI Studio (FREE)
    Improved accuracy: strict 2-phase detection
+   Amazon links: precise per-product search query
    ============================================ */
 
 // ─── CONFIG ───────────────────────────────────
-// Ask visitor for key if config.js not loaded
 if (typeof CONFIG === 'undefined') {
   const savedKey = localStorage.getItem('ecoswap_gemini_key');
   const key = savedKey || prompt(
@@ -29,7 +29,6 @@ const API_KEY = (typeof CONFIG !== 'undefined' &&
                  CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
   ? CONFIG.GEMINI_API_KEY : null;
 
-// Use gemini-2.0-flash for better vision accuracy
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 // ─── STATE ────────────────────────────────────
@@ -62,24 +61,7 @@ function getResultMarketplace() { return MARKETPLACES[resultMarketplaceCode] || 
 document.addEventListener('DOMContentLoaded', () => {
   initFileUpload();
   updateAnalyzeBtn();
-  initMarketplaceSelector();
 });
-
-function initMarketplaceSelector() {
-  const sel = document.getElementById('marketplaceSelect');
-  if (!sel) return;
-  sel.innerHTML = Object.entries(MARKETPLACES)
-    .map(([code, m]) => `<option value="${code}" ${code === currentMarketplace ? 'selected' : ''}>${m.label}</option>`)
-    .join('');
-  sel.addEventListener('change', async e => {
-    currentMarketplace = e.target.value;
-    const resultsVisible = !document.getElementById('resultsSection').classList.contains('hidden');
-    if (resultsVisible && currentImageBase64) {
-      showInfoToast(`Updating prices for ${getMarketplace().label}…`);
-      await analyzeImage();
-    }
-  });
-}
 
 // ─── TAB SWITCHING ────────────────────────────
 function switchTab(tab) {
@@ -139,10 +121,8 @@ async function startWebcam() {
   try {
     webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     const video = document.getElementById('webcamVideo');
-    const placeholder = document.getElementById('webcamPlaceholder');
     video.srcObject = webcamStream;
     video.style.display = 'block';
-    if (placeholder) placeholder.style.display = 'none';
     document.getElementById('startCamBtn').classList.add('hidden');
     document.getElementById('captureBtn').classList.remove('hidden');
   } catch (err) {
@@ -199,23 +179,21 @@ async function analyzeImage() {
   const market = MARKETPLACES[requestMarketplaceCode];
 
   // ── PHASE 1: Strict object identification ──
-  // Ask Gemini to carefully describe WHAT the object IS before classifying
   const phase1Prompt = `You are a precise computer vision system. Look at this image very carefully.
 
 STEP 1 — Identify the PRIMARY object in the image.
 Describe it in detail: What is it? What material is it made of? What is its shape, color, surface texture?
 
 STEP 2 — Answer these strict questions:
-- Is the PRIMARY object made predominantly of PLASTIC? (Answer YES or NO only — not "partially", not "maybe")
-- A plastic object must have these characteristics: synthetic polymer material, typically smooth/glossy or matte synthetic surface, NOT metal, NOT glass, NOT fabric/textile, NOT paper/cardboard, NOT wood, NOT ceramic/porcelain, NOT electronic devices (iron boxes, phones, laptops, keyboards — these are NOT plastic even if they have plastic casing)
+- Is the PRIMARY object made predominantly of PLASTIC? (Answer YES or NO only)
+- A plastic object must be a synthetic polymer material. NOT metal, NOT glass, NOT fabric, NOT paper, NOT wood, NOT ceramic.
 - If the object is an APPLIANCE (iron, kettle, blender, TV remote, phone) — answer NO even if it has plastic parts. This app is for SINGLE-USE or disposable plastic items.
 - If the object is a PERSON, FOOD (without plastic packaging), ANIMAL, PLANT, METAL item, GLASS item — answer NO.
 
-STEP 3 — If YES plastic: identify the specific plastic type from the standard resin codes:
+STEP 3 — If YES plastic: identify the specific plastic type:
 #1 PET, #2 HDPE, #3 PVC, #4 LDPE, #5 PP, #6 PS, #7 Other
-Base this on the ACTUAL ITEM TYPE:
 - Clear water/soda bottles → #1 PET
-- Milk jugs, shampoo bottles, grocery bags → #2 HDPE  
+- Milk jugs, shampoo bottles, grocery bags → #2 HDPE
 - PVC pipes, credit cards, blister packs → #3 PVC
 - Plastic bags, cling wrap, squeeze bottles → #4 LDPE
 - Yogurt containers, bottle caps, straws, food containers → #5 PP
@@ -232,18 +210,17 @@ Respond ONLY with this exact JSON (no markdown, no backticks):
   "rejectionReason": null
 }
 
-If NOT plastic, respond:
+If NOT plastic:
 {
   "isPlastic": false,
-  "objectDescription": "A black electric iron with a metal soleplate and plastic handle",
+  "objectDescription": "A black electric iron with a metal soleplate",
   "plasticType": null,
   "plasticCode": null,
   "confidence": 0,
-  "rejectionReason": "This is an electric iron/appliance, not a plastic item. EcoSwap AI detects single-use and disposable plastic items."
+  "rejectionReason": "This is an electric iron/appliance, not a plastic item."
 }`;
 
   try {
-    // Phase 1 call
     const phase1Response = await fetch(`${API_URL}?key=${API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -279,10 +256,8 @@ If NOT plastic, respond:
       phase1Result = match ? JSON.parse(match[0]) : null;
     }
 
-    // Guard: stale request
     if (requestId !== analysisRequestId) { showLoading(false); return; }
 
-    // Phase 1 rejection
     if (!phase1Result || !phase1Result.isPlastic) {
       showLoading(false);
       const reason = phase1Result?.rejectionReason ||
@@ -291,10 +266,10 @@ If NOT plastic, respond:
       return;
     }
 
-    // ── PHASE 2: Full environmental analysis ──
+    // ── PHASE 2: Full environmental analysis + precise Amazon search queries ──
     const phase2Prompt = `You are an expert environmental scientist. The image shows: "${phase1Result.objectDescription}". It has been identified as plastic type #${phase1Result.plasticCode} (${phase1Result.plasticType}).
 
-Now provide the COMPLETE environmental analysis. Respond ONLY with raw JSON (no markdown, no backticks):
+Provide a COMPLETE environmental analysis. Respond ONLY with raw JSON (no markdown, no backticks):
 
 {
   "detected": true,
@@ -303,7 +278,7 @@ Now provide the COMPLETE environmental analysis. Respond ONLY with raw JSON (no 
   "plasticFullName": "Full chemical name here",
   "confidence": ${phase1Result.confidence},
   "objectDescription": "${phase1Result.objectDescription}",
-  "color": "observed color from image",
+  "color": "observed color",
   "condition": "New / Used / Worn",
   "estimatedAge": "< 1 year",
   "recyclingCode": "#${phase1Result.plasticCode}",
@@ -311,8 +286,8 @@ Now provide the COMPLETE environmental analysis. Respond ONLY with raw JSON (no 
   "decompositionYears": 000,
   "recyclable": "Widely Recyclable / Check Locally / Not Recyclable",
   "toxicity": "Low / Medium / High",
-  "commonUses": "specific uses for this exact plastic type",
-  "impactHeadline": "A single punchy sentence that emotionally conveys the scale of harm — reference the specific item",
+  "commonUses": "specific uses for this plastic type",
+  "impactHeadline": "A punchy sentence that emotionally conveys the scale of harm — reference the specific item",
   "timelineEvents": [
     { "label": "You are born", "year": 0 },
     { "label": "You die", "year": 80 },
@@ -330,32 +305,56 @@ Now provide the COMPLETE environmental analysis. Respond ONLY with raw JSON (no 
     "name": "Most impacted animal",
     "desc": "Specific impact description with a real statistic"
   },
-  "emotionalQuote": "2-3 sentences. Make the reader FEEL the weight of this specific item. Use human scale comparisons — generations, lifetimes, distances. Not generic — specific to this exact plastic.",
+  "emotionalQuote": "2-3 sentences specific to this exact plastic item. Make the reader feel the weight of it.",
   "alternatives": [
     {
-      "name": "Product Name",
-      "brand": "Brand",
-      "description": "Why it's better — specific benefit",
+      "name": "Exact product name as sold on Amazon",
+      "brand": "Exact brand name",
+      "description": "Why it replaces the detected plastic — specific benefit",
       "price": "${market.symbol}XXX–${market.symbol}XXX",
       "priceValue": 000,
       "imageCategory": "steel_water_bottle",
-      "badge": "Top Pick"
+      "badge": "Top Pick",
+      "amazonSearchQuery": "stainless steel reusable water bottle BPA free"
     },
-    { "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000, "imageCategory": "...", "badge": "Eco Certified" },
-    { "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000, "imageCategory": "...", "badge": "Best Value" },
-    { "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000, "imageCategory": "...", "badge": "Stylish Pick" },
-    { "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000, "imageCategory": "...", "badge": "Premium" }
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
+      "imageCategory": "...", "badge": "Eco Certified",
+      "amazonSearchQuery": "specific keyword string that finds this exact product type on Amazon"
+    },
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
+      "imageCategory": "...", "badge": "Best Value",
+      "amazonSearchQuery": "..."
+    },
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
+      "imageCategory": "...", "badge": "Stylish Pick",
+      "amazonSearchQuery": "..."
+    },
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
+      "imageCategory": "...", "badge": "Premium",
+      "amazonSearchQuery": "..."
+    }
   ]
 }
 
 STRICT RULES:
-1. Provide exactly 5 alternatives — always budget to premium order
-2. Alternatives MUST match the detected item (bottle→reusable bottles, straw→metal straws, bag→reusable bags, cup→reusable cups, container→glass containers, etc.)
+1. Exactly 5 alternatives, budget to premium order
+2. Alternatives MUST directly replace the detected item:
+   - Plastic water bottle → reusable steel/glass water bottles
+   - Plastic straw → metal or bamboo straws
+   - Plastic bag → cotton tote or reusable bags
+   - Plastic food container → glass or steel containers
+   - Plastic cup → reusable coffee cups
+   - Plastic wrap → beeswax wrap or silicone bags
+   - Plastic cutlery → bamboo or steel cutlery
 3. Prices MUST be realistic for ${market.label} in ${market.code} with "${market.symbol}" symbol
-4. priceValue = plain number, average of the range, in ${market.code}
-5. imageCategory must be EXACTLY one of: steel_water_bottle, insulated_flask, glass_water_bottle, silicone_food_bag, cotton_tote_bag, mesh_produce_bag, beeswax_food_wrap, bamboo_cutlery_set, glass_food_container, reusable_coffee_cup, metal_straw_set, reusable_shopping_bag
-6. emotionalQuote must be specific to THIS item — not generic plastic facts
-7. harmStats must be ACCURATE and specific to this plastic type
+4. priceValue = plain number (average of range) in ${market.code}
+5. imageCategory MUST be exactly one of: steel_water_bottle, insulated_flask, glass_water_bottle, silicone_food_bag, cotton_tote_bag, mesh_produce_bag, beeswax_food_wrap, bamboo_cutlery_set, glass_food_container, reusable_coffee_cup, metal_straw_set, reusable_shopping_bag
+6. amazonSearchQuery = a precise 4-8 word search string that will find THIS EXACT TYPE of sustainable product on Amazon. Include material (steel/bamboo/glass/silicone), product type, and key feature (reusable/BPA-free/eco). Example: "stainless steel reusable water bottle BPA free 500ml" or "bamboo cutlery set travel case reusable". Do NOT include brand names in the query unless it's a globally known brand like Hydro Flask.
+7. emotionalQuote must be specific to THIS item — not generic plastic facts
 8. Return ONLY raw JSON`;
 
     const phase2Response = await fetch(`${API_URL}?key=${API_KEY}`, {
@@ -421,11 +420,9 @@ function showNotPlasticModal(reason, objectDesc) {
     backdrop-filter:blur(4px);padding:1.5rem;
   `;
   modal.innerHTML = `
-    <div style="
-      background:#33302a;border:1.5px solid #2d5a27;border-radius:10px;
+    <div style="background:#33302a;border:1.5px solid #2d5a27;border-radius:10px;
       padding:2rem;max-width:460px;width:100%;text-align:center;
-      font-family:'Space Grotesk',sans-serif;
-    ">
+      font-family:'Space Grotesk',sans-serif;">
       <div style="font-size:2.8rem;margin-bottom:1rem;">🔍</div>
       <h2 style="color:#e8dcc8;font-size:1.25rem;margin-bottom:0.7rem;">Not a Plastic Item</h2>
       <p style="color:#b8a48a;font-size:0.9rem;line-height:1.7;margin-bottom:1.5rem;">${reason}</p>
@@ -443,8 +440,9 @@ function showNotPlasticModal(reason, objectDesc) {
       <button onclick="document.getElementById('notPlasticModal').remove()" style="
         background:#2d5a27;border:1.5px solid #5aad4e;color:#e8dcc8;
         padding:0.65rem 1.8rem;border-radius:6px;
-        font-family:'Space Grotesk',sans-serif;font-size:0.95rem;font-weight:600;cursor:pointer;
-      ">Got it — Try Another Image</button>
+        font-family:'Space Grotesk',sans-serif;font-size:0.95rem;font-weight:600;cursor:pointer;">
+        Got it — Try Another Image
+      </button>
     </div>
   `;
   document.body.appendChild(modal);
@@ -587,67 +585,6 @@ function renderTimeline(years, events) {
   `;
 }
 
-// ─── PRICE FILTER ─────────────────────────────
-let priceFilterMin = null;
-let priceFilterMax = null;
-
-function extractPriceValue(alt) {
-  if (typeof alt.priceValue === 'number' && !isNaN(alt.priceValue)) return alt.priceValue;
-  const nums = (alt.price || '').match(/[\d.]+/g);
-  if (!nums) return Infinity;
-  const vals = nums.map(Number);
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
-}
-
-function renderPriceFilterBar(alts) {
-  const bar = document.getElementById('priceFilterBar');
-  if (!bar || !alts.length) { if (bar) bar.innerHTML = ''; return; }
-
-  const values = alts.map(extractPriceValue).filter(v => isFinite(v));
-  const lo = Math.floor(Math.min(...values));
-  const hi = Math.ceil(Math.max(...values));
-  const sym = getResultMarketplace().symbol;
-
-  if (priceFilterMin === null) priceFilterMin = lo;
-  if (priceFilterMax === null) priceFilterMax = hi;
-
-  bar.innerHTML = `
-    <div class="price-filter-row">
-      <span class="price-filter-label">Filter by price</span>
-      <div class="price-filter-inputs">
-        <label>Min <input type="number" id="priceMinInput" value="${priceFilterMin}" min="${lo}" max="${hi}" /></label>
-        <span class="price-filter-sym">${sym}</span>
-        <label>Max <input type="number" id="priceMaxInput" value="${priceFilterMax}" min="${lo}" max="${hi}" /></label>
-        <span class="price-filter-sym">${sym}</span>
-        <button class="btn-secondary" id="priceFilterReset" type="button">Reset</button>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('priceMinInput').addEventListener('input', e => {
-    priceFilterMin = e.target.value === '' ? lo : Number(e.target.value);
-    filterAndRenderCards();
-  });
-  document.getElementById('priceMaxInput').addEventListener('input', e => {
-    priceFilterMax = e.target.value === '' ? hi : Number(e.target.value);
-    filterAndRenderCards();
-  });
-  document.getElementById('priceFilterReset').addEventListener('click', () => {
-    priceFilterMin = lo; priceFilterMax = hi;
-    renderPriceFilterBar(lastAlternatives); filterAndRenderCards();
-  });
-}
-
-function filterAndRenderCards() {
-  const min = priceFilterMin ?? -Infinity;
-  const max = priceFilterMax ?? Infinity;
-  const filtered = lastAlternatives.filter(a => {
-    const v = extractPriceValue(a);
-    return v >= min && v <= max;
-  });
-  renderAlternativeCards(filtered);
-}
-
 // ─── PRODUCT SVG ICONS ────────────────────────
 const CATEGORY_ICONS = {
   steel_water_bottle: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -724,8 +661,6 @@ const CATEGORY_ICONS = {
   </svg>`,
 };
 
-const CATEGORY_KEYS = Object.keys(CATEGORY_ICONS).join(', ');
-
 function getCategoryIcon(category) { return CATEGORY_ICONS[category] || null; }
 function altCardImageId(idx) { return `altImg_${idx}`; }
 
@@ -740,26 +675,33 @@ function loadAlternativeImages(sorted) {
   });
 }
 
+// ─── AMAZON LINK BUILDER ──────────────────────
+// Uses the AI-generated amazonSearchQuery for a precise, product-matched search
 function buildAmazonSearchUrl(alt) {
-  const query   = [alt.name, alt.brand].filter(Boolean).join(' ');
-  const encoded = encodeURIComponent(query.trim());
+  // Prefer the AI-generated precise query; fall back to name + brand
+  const query = alt.amazonSearchQuery
+    ? alt.amazonSearchQuery.trim()
+    : [alt.name, alt.brand].filter(Boolean).join(' ');
+  const encoded = encodeURIComponent(query);
   const domain  = getResultMarketplace().domain;
   return `https://www.${domain}/s?k=${encoded}`;
 }
 
-function renderAlternatives(alts) {
-  priceFilterMin = null;
-  priceFilterMax = null;
-  renderPriceFilterBar(alts);
-  filterAndRenderCards();
+// ─── ALTERNATIVES RENDER ──────────────────────
+function extractPriceValue(alt) {
+  if (typeof alt.priceValue === 'number' && !isNaN(alt.priceValue)) return alt.priceValue;
+  const nums = (alt.price || '').match(/[\d.]+/g);
+  if (!nums) return Infinity;
+  const vals = nums.map(Number);
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-function renderAlternativeCards(alts) {
+function renderAlternatives(alts) {
   const sorted = [...alts].sort((a, b) => extractPriceValue(a) - extractPriceValue(b));
   const grid   = document.getElementById('alternativesGrid');
 
   if (!sorted.length) {
-    grid.innerHTML = `<p class="alt-empty">No alternatives in this price range. Try widening the filter.</p>`;
+    grid.innerHTML = `<p style="color:var(--text-dim);font-size:0.9rem;padding:1.5rem;text-align:center;">No alternatives found.</p>`;
     return;
   }
 
@@ -827,35 +769,21 @@ function showError(msg) {
   setTimeout(() => toast.remove(), 6000);
 }
 
-function showInfoToast(msg) {
-  const existing = document.querySelector('.info-toast');
-  if (existing) existing.remove();
-  const toast = document.createElement('div');
-  toast.className = 'error-toast info-toast';
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
-}
-
 // ─── RESET ────────────────────────────────────
 function resetApp() {
   currentImageBase64 = null;
   stopWebcam();
   lastAlternatives = [];
-  priceFilterMin = priceFilterMax = null;
 
   document.getElementById('resultsSection').classList.add('hidden');
   document.getElementById('inputSection').classList.remove('hidden');
 
   clearUpload();
 
-  const webcamCaptured    = document.getElementById('webcamCaptured');
-  const webcamVideo       = document.getElementById('webcamVideo');
-  const webcamPlaceholder = document.getElementById('webcamPlaceholder');
-
+  const webcamCaptured = document.getElementById('webcamCaptured');
+  const webcamVideo    = document.getElementById('webcamVideo');
   if (webcamCaptured) webcamCaptured.style.display = 'none';
   if (webcamVideo)    webcamVideo.style.display    = 'none';
-  if (webcamPlaceholder) webcamPlaceholder.style.display = 'block';
 
   document.getElementById('startCamBtn').classList.remove('hidden');
   document.getElementById('captureBtn').classList.add('hidden');
