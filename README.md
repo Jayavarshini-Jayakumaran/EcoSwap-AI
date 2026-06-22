@@ -1,7 +1,7 @@
 # EcoSwap AI 🌿
 ### Scan. Understand. Choose Better.
 
-Detects plastic from photos or webcam, shows environmental impact with emotional storytelling, and suggests sustainable alternatives — powered by **Google Gemini (FREE)**.
+Detects plastic from photos or webcam, shows environmental impact with emotional storytelling, and suggests sustainable alternatives - powered by **Google Gemini (FREE)**.
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=YOUR_VIDEO_ID">
