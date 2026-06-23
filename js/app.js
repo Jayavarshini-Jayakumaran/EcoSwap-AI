@@ -5,31 +5,10 @@
    Amazon links: precise per-product search query
    ============================================ */
 
-// ─── CONFIG ───────────────────────────────────
-if (typeof CONFIG === 'undefined') {
-  const savedKey = localStorage.getItem('ecoswap_gemini_key');
-  const key = savedKey || prompt(
-    '🌿 EcoSwap AI needs a FREE Gemini API key.\n\n' +
-    'Get yours FREE in 30 seconds:\n' +
-    '1. Go to aistudio.google.com\n' +
-    '2. Sign in with Google → Get API Key\n' +
-    '3. Paste it below\n\n' +
-    '(Your key is saved in your browser — you only do this once)'
-  );
-  if (key && key.trim()) {
-    localStorage.setItem('ecoswap_gemini_key', key.trim());
-    window.CONFIG = { GEMINI_API_KEY: key.trim() };
-  } else {
-    window.CONFIG = { GEMINI_API_KEY: '' };
-  }
-}
-
-const API_KEY = (typeof CONFIG !== 'undefined' &&
-                 CONFIG.GEMINI_API_KEY &&
-                 CONFIG.GEMINI_API_KEY !== 'your_actual_gemini_api_key_here')
-  ? CONFIG.GEMINI_API_KEY : null;
-
-const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+// API key is no longer stored here - it lives on the Cloudflare Worker
+// (cloudflare-worker/worker.js). This just calls the worker, which adds
+// the key and forwards the request to Gemini.
+const API_URL = 'https://ecoswap-ai-proxy.jayavarshini-jayakumaran.workers.dev';
 
 // ─── STATE ────────────────────────────────────
 let currentImageBase64 = null;
@@ -168,10 +147,6 @@ function updateAnalyzeBtn() {
 // ─── ANALYZE (2-phase) ────────────────────────
 async function analyzeImage() {
   if (!currentImageBase64) return;
-  if (!API_KEY) {
-    showError('API key not set. Reload the page to enter your Gemini API key.');
-    return;
-  }
 
   showLoading(true);
   const requestId = ++analysisRequestId;
@@ -221,7 +196,7 @@ If NOT plastic:
 }`;
 
   try {
-    const phase1Response = await fetch(`${API_URL}?key=${API_KEY}`, {
+    const phase1Response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -357,7 +332,7 @@ STRICT RULES:
 7. emotionalQuote must be specific to THIS item — not generic plastic facts
 8. Return ONLY raw JSON`;
 
-    const phase2Response = await fetch(`${API_URL}?key=${API_KEY}`, {
+    const phase2Response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

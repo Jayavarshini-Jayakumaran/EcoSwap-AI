@@ -1,7 +1,6 @@
-# EcoSwap AI 🌿
-### Scan. Understand. Choose Better.
+# EcoSwap AI
 
-Detects plastic from photos or webcam, shows environmental impact with emotional storytelling, and suggests sustainable alternatives - powered by **Google Gemini (FREE)**.
+Scan a plastic item from a photo or webcam and it'll tell you what it is, how bad it is for the environment, and suggest sustainable alternatives to swap it for. Uses Google Gemini for the analysis.
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=YOUR_VIDEO_ID">
@@ -13,88 +12,93 @@ Detects plastic from photos or webcam, shows environmental impact with emotional
 
 ---
 
-## ⚡ Quick Start
+## How it's set up
 
-### Step 1 — Get your FREE Gemini API key
-1. Go to **[aistudio.google.com](https://aistudio.google.com)**
-2. Sign in with Google → click **"Get API Key"**
-3. Copy your key
+The browser doesn't call Gemini directly. It hits a small Cloudflare Worker, which holds the actual Gemini key and forwards the request. The Worker also rate-limits by IP (5/min, 60/day) so the quota doesn't get wiped out by one person hammering it.
 
-> ✅ No credit card needed. Free tier = **1,500 requests/day** forever.
+```
+browser (index.html + js/app.js)
+   -> Cloudflare Worker (cloudflare-worker/worker.js)
+      -> checks rate limit, attaches key
+   -> Gemini API
+```
 
-### Step 2 — Add it to the app
+Earlier version had the key sitting in the frontend code, which is why the quota kept getting exhausted - anyone could grab the key from devtools, or the shared free-tier limit ran out fast since each scan = 2 Gemini calls.
+
+## Setting up your own copy
+
+You only need this part if you're running your own deployment, not just viewing the live demo.
+
+1. Install wrangler and log in:
 ```bash
-cp js/config.example.js js/config.js
+npm install -g wrangler
+wrangler login
 ```
-Then open `js/config.js` and replace the placeholder with your key:
+
+2. From the `cloudflare-worker` folder, create a KV namespace for rate limiting:
+```bash
+cd cloudflare-worker
+wrangler kv namespace create RATE_LIMIT_KV
+```
+Paste the id it gives you into `wrangler.toml`.
+
+3. Add your Gemini key as a secret (get one free at aistudio.google.com):
+```bash
+wrangler secret put GEMINI_API_KEY
+```
+
+4. Deploy:
+```bash
+wrangler deploy
+```
+
+5. Take the URL it prints and put it in `js/app.js`:
 ```js
-const CONFIG = {
-  GEMINI_API_KEY: 'your_actual_gemini_api_key_here'
-};
+const API_URL = 'https://your-worker-url.workers.dev';
 ```
 
----
+## Running it
 
-## ▶ Run the App
-
-Double-click `index.html` in your browser.
-
-> 💡 For webcam support on some browsers, run a local server:
-> ```bash
-> python3 -m http.server 8080
-> # then open http://localhost:8080
-> ```
-
-## 📁 Project Structure
-
-```
-ecoswap/
-├── index.html              Single-page app
-├── css/
-│   └── style.css           Dark beige + green border theme
-├── js/
-│   ├── app.js               All logic (webcam, upload, Gemini AI, render)
-│   └── config.example.js    Copy → config.js and add your API keys
-├── .env                     Reference for environment variables
-├── .gitignore
-└── README.md
+Just open `index.html` in a browser, or run a local server for more reliable webcam access:
+```bash
+python3 -m http.server 8080
 ```
 
-> ⚠️ `js/config.js` is in `.gitignore` — your API keys will never be committed.
+## Project structure
+
+```
+EcoSwap-AI/
+  index.html
+  css/style.css
+  js/app.js
+  cloudflare-worker/
+    worker.js
+    wrangler.toml
+```
+
+## Features
+
+- Upload or webcam capture
+- Identifies plastic type, recyclability, confidence score
+- Environmental impact breakdown (decomposition time, harm to wildlife, etc)
+- Suggests 5 sustainable alternatives, budget to premium
+- Filter alternatives by price
+- Switch between Amazon marketplaces (India, US, UK, Germany, Canada, Australia, Japan)
+
+## Built with
+
+- Google Gemini 2.0 Flash
+- Cloudflare Workers + KV (free tier)
+- Plain JS/HTML/CSS, no framework
+
+## Note on security
+
+The key used to be exposed in the frontend code. That key has been revoked. Nothing Gemini-related is in the browser or repo anymore - the only secret lives in Cloudflare.
 
 ---
 
-## ✨ Features
+Email - jayavarshinijayakumaran11@gmail.com
 
-| Feature | Details |
-|---|---|
-| 📁 Upload Image | Drag & drop or click — JPG, PNG, WEBP |
-| 📷 Webcam | Live capture with retake option |
-| 🧠 AI Detection | Plastic type, code, recyclability, toxicity, confidence % |
-| 🌍 Impact Story | Animated decomposition timeline + harm stats + affected animal |
-| 💬 Emotional Quote | AI-generated devastating truth about that specific plastic |
-| 🛒 Sustainable Alternatives | 5 eco products, budget → premium, with category icons |
-| 💰 Price Filter | Filter alternatives by min/max price, sorted low to high |
-| 🌐 Multi-Marketplace | Switch between Amazon India, US, UK, Germany, Canada, Australia, Japan — prices and links update together |
+LinkedIn - https://www.linkedin.com/in/jayavarshini-jayakumaran
 
----
-
-## 🛠️ Built With
-
-- **Google Gemini 2.5 Flash Lite** — multimodal plastic detection & environmental analysis
-- **Vanilla JavaScript, HTML5, CSS3** — no framework, no build step
-- **MediaDevices API** — webcam capture
-
----
-
-♻️ Choose better. Live greener.
-
----
-
-📧 **Email** — [jayavarshinijayakumaran11@gmail.com](mailto:jayavarshinijayakumaran11@gmail.com)
-
-🙌 **Connect** — [LinkedIn: Jayavarshini Jayakumaran](https://www.linkedin.com/in/jayavarshini-jayakumaran)
-
-📄 **License** — [MIT](LICENSE)
-
-<p align="center"><b>Finish what you started 💻</b></p>
+License - MIT

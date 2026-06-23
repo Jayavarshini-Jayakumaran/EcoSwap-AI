@@ -1,12 +1,17 @@
-# Environment & secrets
+# secrets - Gemini key lives in Cloudflare now, not here
 .env
 .env.local
 .env.*.local
 
-# API key config (never commit this!)
+# old client-side key config, not used anymore
 js/config.js
 
-# Python local server
+# wrangler local state
+cloudflare-worker/.wrangler/
+cloudflare-worker/.dev.vars
+.wrangler/
+
+# python local server
 venv/
 __pycache__/
 *.pyc
@@ -15,6 +20,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Editor
+# editor
 .vscode/
 .idea/

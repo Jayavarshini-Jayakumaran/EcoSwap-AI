@@ -1,0 +1,12 @@
+name = "ecoswap-ai-proxy"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# id from: wrangler kv namespace create RATE_LIMIT_KV
+kv_namespaces = [
+  { binding = "RATE_LIMIT_KV", id = "a52b32116d1944acb430af61957b446f" }
+]
+
+# GEMINI_API_KEY is set separately via: wrangler secret put GEMINI_API_KEY
+[vars]
+ALLOWED_ORIGIN = "https://jayavarshini-jayakumaran.github.io"
