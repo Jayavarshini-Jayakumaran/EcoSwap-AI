@@ -1,13 +1,9 @@
 /* ============================================
    ECOSWAP AI — app.js
-   Gemini 2.0 Flash via Google AI Studio (FREE)
-   Improved accuracy: strict 2-phase detection
-   Amazon links: precise per-product search query
+   Single-pass analysis (1 API call)
+   Strict: item-matched alternatives, all AI-generated
    ============================================ */
 
-// API key is no longer stored here - it lives on the Cloudflare Worker
-// (cloudflare-worker/worker.js). This just calls the worker, which adds
-// the key and forwards the request to Gemini.
 const API_URL = 'https://ecoswap-ai-proxy.jayavarshini-jayakumaran.workers.dev';
 
 // ─── STATE ────────────────────────────────────
@@ -30,8 +26,8 @@ const MARKETPLACES = {
   JP: { domain: 'amazon.co.jp',  symbol: '¥',   code: 'JPY', label: 'Japan (¥ JPY)' },
 };
 
-let currentMarketplace     = 'IN';
-let resultMarketplaceCode  = 'IN';
+let currentMarketplace    = 'IN';
+let resultMarketplaceCode = 'IN';
 
 function getMarketplace()       { return MARKETPLACES[currentMarketplace]    || MARKETPLACES.IN; }
 function getResultMarketplace() { return MARKETPLACES[resultMarketplaceCode] || MARKETPLACES.IN; }
@@ -112,7 +108,7 @@ async function startWebcam() {
 function captureFrame() {
   const video  = document.getElementById('webcamVideo');
   const canvas = document.getElementById('webcamCanvas');
-  canvas.width = video.videoWidth;
+  canvas.width  = video.videoWidth;
   canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
   const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
@@ -144,7 +140,7 @@ function updateAnalyzeBtn() {
   if (btn) btn.disabled = !currentImageBase64;
 }
 
-// ─── ANALYZE (2-phase) ────────────────────────
+// ─── ANALYZE ──────────────────────────────────
 async function analyzeImage() {
   if (!currentImageBase64) return;
 
@@ -153,219 +149,276 @@ async function analyzeImage() {
   const requestMarketplaceCode = currentMarketplace;
   const market = MARKETPLACES[requestMarketplaceCode];
 
-  // ── PHASE 1: Strict object identification ──
-  const phase1Prompt = `You are a precise computer vision system. Look at this image very carefully.
+  // ── MASTER PROMPT ──────────────────────────────────────────────────────────
+  // Instructions are layered in priority order so the model reads them clearly.
+  // The core goal: identify exactly what is in the image, determine if it's
+  // plastic, and if so, give 100% accurate, item-specific environmental data
+  // and alternatives that replace THIS exact item (not a generic category).
+  // ───────────────────────────────────────────────────────────────────────────
+  const prompt = `You are an expert materials scientist, environmental analyst, and visual recognition system combined.
 
-STEP 1 — Identify the PRIMARY object in the image.
-Describe it in detail: What is it? What material is it made of? What is its shape, color, surface texture?
+════════════════════════════════════════════
+STEP 1 — IDENTIFY THE ITEM WITH PRECISION
+════════════════════════════════════════════
 
-STEP 2 — Answer these strict questions:
-- Is the PRIMARY object made predominantly of PLASTIC? (Answer YES or NO only)
-- A plastic object must be a synthetic polymer material. NOT metal, NOT glass, NOT fabric, NOT paper, NOT wood, NOT ceramic.
-- If the object is an APPLIANCE (iron, kettle, blender, TV remote, phone) — answer NO even if it has plastic parts. This app is for SINGLE-USE or disposable plastic items.
-- If the object is a PERSON, FOOD (without plastic packaging), ANIMAL, PLANT, METAL item, GLASS item — answer NO.
+Examine the image VERY carefully. Items may be large or small, near or far, fully visible or partially shown.
+Look at: shape, color, texture, label/text if visible, size context, surface finish, packaging features.
 
-STEP 3 — If YES plastic: identify the specific plastic type:
-#1 PET, #2 HDPE, #3 PVC, #4 LDPE, #5 PP, #6 PS, #7 Other
-- Clear water/soda bottles → #1 PET
-- Milk jugs, shampoo bottles, grocery bags → #2 HDPE
-- PVC pipes, credit cards, blister packs → #3 PVC
-- Plastic bags, cling wrap, squeeze bottles → #4 LDPE
-- Yogurt containers, bottle caps, straws, food containers → #5 PP
-- Foam cups, disposable cutlery, CD cases → #6 PS
-- Multi-layer, baby bottles, large water cooler jugs → #7 Other
+Write a highly specific description. Examples of the precision expected:
+- NOT "a bottle" → YES "a 500ml single-use transparent PET mineral water bottle with a blue flip-top cap and a paper label"
+- NOT "a bag" → YES "a thin transparent LDPE polybag, like used for produce/bread, heat-sealed at the top"
+- NOT "a container" → YES "a white #5 PP yogurt cup, approximately 150g size, with a foil peel-off lid"
+- NOT "straws" → YES "a bundle of individually wrapped single-use white polypropylene drinking straws"
+
+════════════════════════════════════════════
+STEP 2 — IS IT PLASTIC?
+════════════════════════════════════════════
+
+PLASTIC = synthetic polymer material made entirely or predominantly of plastic.
+This includes: bottles, bags, containers, cups, straws, wrapping, packaging film, cutlery, trays, pouches, sachets, sacks, jerry cans, buckets, cling film, foam packaging.
+
+NOT PLASTIC — reject these even if they contain small plastic parts:
+• Electronics / appliances (phones, laptops, TVs, remotes, irons, kettles, cameras)
+• Clothing / fabric / textiles
+• Metal items (cans, tins, aluminium foil, steel containers)
+• Glass items (jars, bottles, windows)
+• Paper / cardboard (boxes, bags, cartons — unless they have a significant plastic coating/layer)
+• Natural items (fruits, vegetables, wood, plants, animals, food)
+• People / body parts
+• Composite products where plastic is clearly secondary (e.g. a pen is mostly plastic but it's a stationery item, not a disposable plastic item in the environmental sense)
+
+EDGE CASES — scan these items:
+• Tetra packs / juice boxes with plastic spout → YES (plastic coating + spout)
+• Bubble wrap → YES
+• Plastic-coated paper cups → YES (note the plastic lining)
+• Styrofoam / EPS foam → YES (#6 PS)
+• Plastic ziplock bags → YES
+• PVC pipe / hose → YES
+• Plastic toys → YES (note this)
+
+If NOT plastic → respond with the NOT-PLASTIC JSON below.
+If YES plastic → respond with the PLASTIC JSON below.
+
+SPECIAL CASE — ELECTRONICS (phones, tablets, laptops, cameras, etc.):
+These are correctly classified as NOT PLASTIC (the device itself isn't a single-use plastic item).
+However, the most common plastic accessory paired with a phone/tablet is its protective case, which is
+usually synthetic (TPU/silicone/PC plastic) and replaced often. So for these items specifically, in addition
+to the rejection explanation, suggest ONE sustainable case alternative (e.g. biodegradable bamboo/cork phone
+case, compostable plant-based case, recycled-ocean-plastic case) using the "suggestedAlternative" field below.
+Only include "suggestedAlternative" for phones/tablets/electronics with a case-like accessory — omit it
+(set to null) for everything else that's not plastic (metal cans, glass jars, clothing, food, etc.).
+
+════════════════════════════════════════════
+STEP 3A — IF NOT PLASTIC
+════════════════════════════════════════════
+
+Respond ONLY with this exact JSON (no markdown, no backticks, no explanation):
+{
+  "detected": false,
+  "objectDescription": "describe exactly what you see",
+  "material": "the actual material (metal / glass / fabric / paper / food / electronic / etc.)",
+  "rejectionReason": "Clear, friendly 1-2 sentence explanation of why this is not a scannable plastic item and what the user should try instead.",
+  "suggestedAlternative": null
+}
+
+If the item is a phone/tablet/electronic device, instead populate suggestedAlternative like this:
+{
+  "detected": false,
+  "objectDescription": "describe exactly what you see",
+  "material": "electronic device",
+  "rejectionReason": "Friendly 1-2 sentence explanation that this is an electronic device, not a single-use plastic item — but mention that its case/accessories often are.",
+  "suggestedAlternative": {
+    "name": "Specific product name as commonly sold",
+    "brand": "Real brand available in ${market.label}",
+    "description": "How this sustainable phone case replaces a typical plastic phone case for this device.",
+    "price": "${market.symbol}XXX–${market.symbol}XXX",
+    "priceValue": 0,
+    "imageCategory": "phone_case",
+    "badge": "Eco Pick",
+    "amazonSearchQuery": "biodegradable bamboo phone case compostable"
+  }
+}
+
+════════════════════════════════════════════
+STEP 3B — IF PLASTIC
+════════════════════════════════════════════
+
+ALL fields below must be generated fresh from your knowledge about THIS specific plastic item.
+NOTHING should be generic or copy-pasted — every sentence must refer to the exact item identified.
+
+PLASTIC TYPE REFERENCE:
+#1 PET  — water/soda bottles, food jars, blister packs
+#2 HDPE — milk jugs, shampoo bottles, detergent bottles, grocery bags, jerry cans
+#3 PVC  — pipes, hoses, credit cards, blister packaging, floor mats, cables
+#4 LDPE — cling wrap, bread bags, produce bags, squeezable bottles, bubble wrap
+#5 PP   — yogurt cups, bottle caps, straws, food containers, takeaway boxes, potato chip bags
+#6 PS   — styrofoam cups, foam trays, CD cases, disposable cutlery, plastic egg cartons
+#7 Other — multi-layer pouches, baby bottles, large water coolers, composite packaging
+
+ALTERNATIVE RULES — THE MOST CRITICAL SECTION:
+Each alternative must be a DIRECT replacement for the EXACT item identified.
+Think: "If someone has THIS item and wants to stop using single-use plastic for it,
+what sustainable product would they buy instead?"
+
+Examples of correct matching:
+• Single-use PET water bottle → stainless steel / glass water bottle of similar size
+• Plastic grocery bag → cotton tote bag, jute bag
+• Plastic straw → metal straw, bamboo straw, glass straw
+• Plastic wrap / cling film → beeswax wrap, silicone stretch lids, reusable silicone food bags
+• Styrofoam coffee cup → reusable coffee cup / travel mug
+• Plastic food container / takeaway box → glass food container, stainless steel tiffin
+• Plastic cutlery → bamboo cutlery, stainless steel cutlery set
+• Shampoo bottle → shampoo bar, refillable dispenser
+• Plastic produce bag / bread bag → mesh produce bag, cloth bag
+• Bubble wrap → recycled paper padding, honeycomb paper wrap
+• PVC pipe → not a consumer item, skip — offer to describe material alternatives
+• Plastic toy → wooden toy, fabric toy (flag that this category is noted)
+• Ziplock bag → reusable silicone bag
 
 Respond ONLY with this exact JSON (no markdown, no backticks):
 {
-  "isPlastic": true,
-  "objectDescription": "A clear transparent PET water bottle with a blue screw cap",
-  "plasticType": "PET",
+  "detected": true,
   "plasticCode": "1",
-  "confidence": 92,
-  "rejectionReason": null
+  "plasticName": "PET",
+  "plasticFullName": "Polyethylene Terephthalate",
+  "confidence": 94,
+  "objectDescription": "Highly specific description of the exact item seen in the image",
+  "color": "exact observed color",
+  "condition": "New / Used / Worn",
+  "estimatedAge": "< 1 year",
+  "recyclingCode": "#1",
+  "globalUsagePercent": "18",
+  "decompositionYears": 450,
+  "recyclable": "Widely Recyclable",
+  "toxicity": "Low",
+  "commonUses": "Specific real-world uses of this exact plastic type, not generic",
+  "impactHeadline": "A punchy, emotionally resonant sentence about THIS specific item's environmental harm. Must name the item specifically.",
+  "timelineEvents": [
+    { "label": "You are born", "year": 0 },
+    { "label": "You die (avg. lifespan)", "year": 73 },
+    { "label": "This plastic halfway broken down", "year": 225 },
+    { "label": "Fully decomposed", "year": 450 }
+  ],
+  "harmStats": [
+    { "icon": "🐟", "stat": "XX% of fish", "desc": "Specific statistic about THIS plastic type's harm to marine life — do not use generic plastic stats" },
+    { "icon": "🌊", "stat": "X million tonnes", "desc": "Specific ocean/waterway pollution fact about THIS plastic type" },
+    { "icon": "🧪", "stat": "X chemicals", "desc": "Specific chemical leaching or health risk from THIS plastic type" },
+    { "icon": "♻️", "stat": "Only XX% recycled", "desc": "Real recycling rate or barrier for THIS specific plastic type" }
+  ],
+  "affectedAnimal": {
+    "icon": "🐢",
+    "name": "Most impacted animal species for this plastic type",
+    "desc": "Specific, real, cited-style impact on that animal from this plastic type. Include a statistic."
+  },
+  "emotionalQuote": "2-3 sentences about THIS exact item. Make the reader viscerally understand the environmental cost of THIS specific object — not plastic in general.",
+  "alternatives": [
+    {
+      "name": "Specific product name as commonly sold",
+      "brand": "Specific real brand that makes this",
+      "description": "Exactly how this replaces the detected item. Be specific about size, function, material.",
+      "price": "${market.symbol}XXX–${market.symbol}XXX",
+      "priceValue": 350,
+      "imageCategory": "steel_water_bottle",
+      "badge": "Top Pick",
+      "amazonSearchQuery": "stainless steel water bottle 500ml BPA free reusable"
+    },
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 0,
+      "imageCategory": "...", "badge": "Eco Certified", "amazonSearchQuery": "..."
+    },
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 0,
+      "imageCategory": "...", "badge": "Best Value", "amazonSearchQuery": "..."
+    },
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 0,
+      "imageCategory": "...", "badge": "Stylish Pick", "amazonSearchQuery": "..."
+    },
+    {
+      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 0,
+      "imageCategory": "...", "badge": "Premium", "amazonSearchQuery": "..."
+    }
+  ]
 }
 
-If NOT plastic:
-{
-  "isPlastic": false,
-  "objectDescription": "A black electric iron with a metal soleplate",
-  "plasticType": null,
-  "plasticCode": null,
-  "confidence": 0,
-  "rejectionReason": "This is an electric iron/appliance, not a plastic item."
-}`;
+STRICT RULES — ALTERNATIVES:
+1. All 5 alternatives must directly replace the EXACT item detected — not the category, not a similar item.
+   If the image shows a 1-litre plastic milk jug, all 5 alternatives must be reusable milk containers or
+   refillable milk alternatives — NOT generic water bottles.
+2. Alternatives vary by price: cheapest first → premium last.
+3. Prices must be realistic for ${market.label} market in ${market.code} using "${market.symbol}" symbol.
+4. priceValue = a single number (the middle of the price range).
+5. imageCategory must be EXACTLY one of:
+   steel_water_bottle | insulated_flask | glass_water_bottle | silicone_food_bag |
+   cotton_tote_bag | mesh_produce_bag | beeswax_food_wrap | bamboo_cutlery_set |
+   glass_food_container | reusable_coffee_cup | metal_straw_set | reusable_shopping_bag
+   Choose the category that best matches what the alternative actually IS.
+6. amazonSearchQuery must be 4–8 words that would find THIS exact alternative on Amazon.
+   Include material + product type + key features. Avoid vague terms like "eco friendly product".
+7. brand should be a real brand available in ${market.label} — e.g. Milton, Cello, Borosil for India;
+   Hydro Flask, Klean Kanteen, Stasher for US/UK. If uncertain, use a plausible real brand.
+
+STRICT RULES — DATA ACCURACY:
+• decompositionYears, globalUsagePercent, harmStats, affectedAnimal — must reflect real published data for THIS plastic type.
+• Do NOT invent statistics. Use known ranges if exact figures are uncertain.
+• confidence = your visual certainty that this IS the specific plastic type identified (0–100).
+• Return ONLY raw JSON. No markdown. No explanation before or after.`;
 
   try {
-    const phase1Response = await fetch(API_URL, {
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [
             { inline_data: { mime_type: currentImageMime, data: currentImageBase64 } },
-            { text: phase1Prompt }
+            { text: prompt }
           ]
         }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 512 }
+        generationConfig: {
+          temperature: 0.15,       // low temp = more deterministic, fewer hallucinations
+          maxOutputTokens: 2800,   // enough for full JSON with 5 alternatives
+          topP: 0.9,
+          topK: 40
+        }
       })
     });
 
-    if (!phase1Response.ok) {
-      const err = await phase1Response.json().catch(() => ({}));
-      const errMsg = err.error?.message || `API error ${phase1Response.status}`;
-      if (phase1Response.status === 429 || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const errMsg = err.error?.message || `API error ${response.status}`;
+      if (response.status === 429 || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
         showLoading(false); showQuotaError(); return;
       }
       throw new Error(errMsg);
     }
 
-    const phase1Data = await phase1Response.json();
-    const raw1 = phase1Data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean1 = raw1.replace(/```json|```/g, '').trim();
-
-    let phase1Result;
-    try {
-      phase1Result = JSON.parse(clean1);
-    } catch {
-      const match = clean1.match(/\{[\s\S]*\}/);
-      phase1Result = match ? JSON.parse(match[0]) : null;
-    }
-
-    if (requestId !== analysisRequestId) { showLoading(false); return; }
-
-    if (!phase1Result || !phase1Result.isPlastic) {
-      showLoading(false);
-      const reason = phase1Result?.rejectionReason ||
-        `"${phase1Result?.objectDescription || 'This object'}" does not appear to be a plastic item. Please scan a plastic bottle, bag, container, wrapper, or similar item.`;
-      showNotPlasticModal(reason, phase1Result?.objectDescription || '');
-      return;
-    }
-
-    // ── PHASE 2: Full environmental analysis + precise Amazon search queries ──
-    const phase2Prompt = `You are an expert environmental scientist. The image shows: "${phase1Result.objectDescription}". It has been identified as plastic type #${phase1Result.plasticCode} (${phase1Result.plasticType}).
-
-Provide a COMPLETE environmental analysis. Respond ONLY with raw JSON (no markdown, no backticks):
-
-{
-  "detected": true,
-  "plasticCode": "${phase1Result.plasticCode}",
-  "plasticName": "${phase1Result.plasticType}",
-  "plasticFullName": "Full chemical name here",
-  "confidence": ${phase1Result.confidence},
-  "objectDescription": "${phase1Result.objectDescription}",
-  "color": "observed color",
-  "condition": "New / Used / Worn",
-  "estimatedAge": "< 1 year",
-  "recyclingCode": "#${phase1Result.plasticCode}",
-  "globalUsagePercent": "XX",
-  "decompositionYears": 000,
-  "recyclable": "Widely Recyclable / Check Locally / Not Recyclable",
-  "toxicity": "Low / Medium / High",
-  "commonUses": "specific uses for this plastic type",
-  "impactHeadline": "A punchy sentence that emotionally conveys the scale of harm — reference the specific item",
-  "timelineEvents": [
-    { "label": "You are born", "year": 0 },
-    { "label": "You die", "year": 80 },
-    { "label": "Plastic halfway decomposed", "year": HALF_OF_DECOMPOSITION_YEARS },
-    { "label": "Fully decomposed", "year": DECOMPOSITION_YEARS }
-  ],
-  "harmStats": [
-    { "icon": "🐟", "stat": "Specific stat", "desc": "specific to THIS plastic type" },
-    { "icon": "🌊", "stat": "Specific stat", "desc": "ocean/water pollution fact" },
-    { "icon": "🧪", "stat": "Specific stat", "desc": "chemical/health risk" },
-    { "icon": "♻️", "stat": "Specific stat", "desc": "recycling reality" }
-  ],
-  "affectedAnimal": {
-    "icon": "🐢",
-    "name": "Most impacted animal",
-    "desc": "Specific impact description with a real statistic"
-  },
-  "emotionalQuote": "2-3 sentences specific to this exact plastic item. Make the reader feel the weight of it.",
-  "alternatives": [
-    {
-      "name": "Exact product name as sold on Amazon",
-      "brand": "Exact brand name",
-      "description": "Why it replaces the detected plastic — specific benefit",
-      "price": "${market.symbol}XXX–${market.symbol}XXX",
-      "priceValue": 000,
-      "imageCategory": "steel_water_bottle",
-      "badge": "Top Pick",
-      "amazonSearchQuery": "stainless steel reusable water bottle BPA free"
-    },
-    {
-      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
-      "imageCategory": "...", "badge": "Eco Certified",
-      "amazonSearchQuery": "specific keyword string that finds this exact product type on Amazon"
-    },
-    {
-      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
-      "imageCategory": "...", "badge": "Best Value",
-      "amazonSearchQuery": "..."
-    },
-    {
-      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
-      "imageCategory": "...", "badge": "Stylish Pick",
-      "amazonSearchQuery": "..."
-    },
-    {
-      "name": "...", "brand": "...", "description": "...", "price": "...", "priceValue": 000,
-      "imageCategory": "...", "badge": "Premium",
-      "amazonSearchQuery": "..."
-    }
-  ]
-}
-
-STRICT RULES:
-1. Exactly 5 alternatives, budget to premium order
-2. Alternatives MUST directly replace the detected item:
-   - Plastic water bottle → reusable steel/glass water bottles
-   - Plastic straw → metal or bamboo straws
-   - Plastic bag → cotton tote or reusable bags
-   - Plastic food container → glass or steel containers
-   - Plastic cup → reusable coffee cups
-   - Plastic wrap → beeswax wrap or silicone bags
-   - Plastic cutlery → bamboo or steel cutlery
-3. Prices MUST be realistic for ${market.label} in ${market.code} with "${market.symbol}" symbol
-4. priceValue = plain number (average of range) in ${market.code}
-5. imageCategory MUST be exactly one of: steel_water_bottle, insulated_flask, glass_water_bottle, silicone_food_bag, cotton_tote_bag, mesh_produce_bag, beeswax_food_wrap, bamboo_cutlery_set, glass_food_container, reusable_coffee_cup, metal_straw_set, reusable_shopping_bag
-6. amazonSearchQuery = a precise 4-8 word search string that will find THIS EXACT TYPE of sustainable product on Amazon. Include material (steel/bamboo/glass/silicone), product type, and key feature (reusable/BPA-free/eco). Example: "stainless steel reusable water bottle BPA free 500ml" or "bamboo cutlery set travel case reusable". Do NOT include brand names in the query unless it's a globally known brand like Hydro Flask.
-7. emotionalQuote must be specific to THIS item — not generic plastic facts
-8. Return ONLY raw JSON`;
-
-    const phase2Response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { inline_data: { mime_type: currentImageMime, data: currentImageBase64 } },
-            { text: phase2Prompt }
-          ]
-        }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
-      })
-    });
-
-    if (!phase2Response.ok) {
-      const err = await phase2Response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error ${phase2Response.status}`);
-    }
-
-    const phase2Data = await phase2Response.json();
-    const raw2  = phase2Data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean2 = raw2.replace(/```json|```/g, '').trim();
+    const data  = await response.json();
+    const raw   = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const clean = raw.replace(/```json|```/g, '').trim();
 
     let result;
     try {
-      result = JSON.parse(clean2);
+      result = JSON.parse(clean);
     } catch {
-      const match = clean2.match(/\{[\s\S]*\}/);
+      // try to salvage partial JSON
+      const match = clean.match(/\{[\s\S]*\}/);
       if (match) result = JSON.parse(match[0]);
-      else throw new Error('Could not parse analysis. Please try again.');
+      else throw new Error('Could not parse the analysis result. Please try again.');
     }
 
     showLoading(false);
     if (requestId !== analysisRequestId) return;
+
+    if (!result.detected) {
+      showNotPlasticModal(
+        result.rejectionReason || `This doesn't appear to be a plastic item.`,
+        result.objectDescription || '',
+        result.material || '',
+        result.suggestedAlternative || null
+      );
+      return;
+    }
 
     renderResults(result, requestMarketplaceCode);
 
@@ -382,41 +435,55 @@ STRICT RULES:
 }
 
 // ─── NOT PLASTIC MODAL ────────────────────────
-function showNotPlasticModal(reason, objectDesc) {
+function showNotPlasticModal(reason, objectDesc, material, suggestedAlternative) {
   const existing = document.getElementById('notPlasticModal');
   if (existing) existing.remove();
 
+  const materialTag = material
+    ? `<div style="display:inline-block;background:#3a362f;border:1px solid #5aad4e;border-radius:4px;padding:0.2rem 0.6rem;font-size:0.78rem;color:#5aad4e;font-family:'Space Mono',monospace;margin-bottom:1rem;">MATERIAL DETECTED: ${material.toUpperCase()}</div>`
+    : '';
+
+  const descTag = objectDesc
+    ? `<div style="background:#3a362f;border-left:3px solid #5aad4e;padding:0.7rem 0.9rem;border-radius:4px;margin-bottom:1.2rem;text-align:left;font-size:0.84rem;color:#b8a48a;font-style:italic;">"${objectDesc}"</div>`
+    : '';
+
+  const altTag = suggestedAlternative
+    ? `<div style="background:#3a362f;border:1.5px solid #2d5a27;border-radius:6px;padding:0.9rem;margin-bottom:1.4rem;text-align:left;">
+        <div style="color:#5aad4e;font-size:0.75rem;font-family:'Space Mono',monospace;margin-bottom:0.5rem;">🌿 SUSTAINABLE SWAP FOR ITS CASE</div>
+        <div style="color:#e8dcc8;font-size:0.92rem;font-weight:600;">${suggestedAlternative.name}${suggestedAlternative.brand ? ' — ' + suggestedAlternative.brand : ''}</div>
+        <div style="color:#b8a48a;font-size:0.84rem;line-height:1.6;margin:0.3rem 0 0.6rem;">${suggestedAlternative.description || ''}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="color:#5aad4e;font-size:0.88rem;font-weight:600;">${suggestedAlternative.price || ''}</span>
+          <a href="${buildAmazonSearchUrl(suggestedAlternative)}" target="_blank" rel="noopener noreferrer" style="color:#e8dcc8;background:#2d5a27;border:1px solid #5aad4e;border-radius:5px;padding:0.4rem 0.9rem;font-size:0.8rem;text-decoration:none;">Shop on ${getResultMarketplace().domain} →</a>
+        </div>
+      </div>`
+    : '';
+
   const modal = document.createElement('div');
   modal.id = 'notPlasticModal';
-  modal.style.cssText = `
-    position:fixed;inset:0;z-index:9999;
-    background:rgba(43,38,32,0.93);
-    display:flex;align-items:center;justify-content:center;
-    backdrop-filter:blur(4px);padding:1.5rem;
-  `;
+  modal.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(43,38,32,0.93);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:1.5rem;`;
   modal.innerHTML = `
-    <div style="background:#33302a;border:1.5px solid #2d5a27;border-radius:10px;
-      padding:2rem;max-width:460px;width:100%;text-align:center;
-      font-family:'Space Grotesk',sans-serif;">
-      <div style="font-size:2.8rem;margin-bottom:1rem;">🔍</div>
-      <h2 style="color:#e8dcc8;font-size:1.25rem;margin-bottom:0.7rem;">Not a Plastic Item</h2>
-      <p style="color:#b8a48a;font-size:0.9rem;line-height:1.7;margin-bottom:1.5rem;">${reason}</p>
-      <div style="background:#3a362f;border:1.5px solid #2d5a27;border-radius:6px;padding:0.9rem;margin-bottom:1.5rem;text-align:left;">
-        <div style="color:#5aad4e;font-size:0.75rem;font-family:'Space Mono',monospace;margin-bottom:0.4rem;">WHAT TO SCAN INSTEAD</div>
-        <div style="color:#e8dcc8;font-size:0.85rem;line-height:1.6;">
-          ✅ Plastic water bottles &amp; soda bottles<br>
-          ✅ Plastic bags &amp; wrapping<br>
-          ✅ Plastic food containers &amp; cups<br>
-          ✅ Plastic straws, cutlery, packaging<br>
-          ✅ Shampoo bottles, detergent bottles<br>
-          ❌ Appliances, electronics, metals, glass
+    <div style="background:#33302a;border:1.5px solid #2d5a27;border-radius:10px;padding:2rem;max-width:480px;width:100%;text-align:center;font-family:'Space Grotesk',sans-serif;">
+      <div style="font-size:2.8rem;margin-bottom:0.8rem;">🔍</div>
+      <h2 style="color:#e8dcc8;font-size:1.2rem;margin-bottom:0.6rem;">Not a Single-Use Plastic Item</h2>
+      ${materialTag}
+      ${descTag}
+      <p style="color:#b8a48a;font-size:0.88rem;line-height:1.7;margin-bottom:1.4rem;">${reason}</p>
+      ${altTag}
+      <div style="background:#3a362f;border:1.5px solid #2d5a27;border-radius:6px;padding:0.9rem;margin-bottom:1.4rem;text-align:left;">
+        <div style="color:#5aad4e;font-size:0.75rem;font-family:'Space Mono',monospace;margin-bottom:0.5rem;">✅ ITEMS YOU CAN SCAN</div>
+        <div style="color:#e8dcc8;font-size:0.83rem;line-height:1.7;">
+          • Plastic water / soda / juice bottles<br>
+          • Plastic bags, wrapping, cling film<br>
+          • Plastic food containers, cups, trays<br>
+          • Straws, cutlery, styrofoam packaging<br>
+          • Shampoo / detergent / lotion bottles<br>
+          • Plastic pouches, sachets, zip-lock bags<br>
+          • Bubble wrap, plastic mailers
         </div>
       </div>
-      <button onclick="document.getElementById('notPlasticModal').remove()" style="
-        background:#2d5a27;border:1.5px solid #5aad4e;color:#e8dcc8;
-        padding:0.65rem 1.8rem;border-radius:6px;
-        font-family:'Space Grotesk',sans-serif;font-size:0.95rem;font-weight:600;cursor:pointer;">
-        Got it — Try Another Image
+      <button onclick="document.getElementById('notPlasticModal').remove()" style="background:#2d5a27;border:1.5px solid #5aad4e;color:#e8dcc8;padding:0.65rem 1.8rem;border-radius:6px;font-family:'Space Grotesk',sans-serif;font-size:0.92rem;font-weight:600;cursor:pointer;">
+        Try Another Image
       </button>
     </div>
   `;
@@ -628,6 +695,12 @@ const CATEGORY_ICONS = {
     <line x1="70" y1="10" x2="70" y2="90" stroke="var(--green-bright)" stroke-width="5" stroke-linecap="round"/>
     <rect x="14" y="58" width="72" height="14" rx="7" fill="var(--bg-input)" stroke="var(--border-mid)" stroke-width="1.5"/>
   </svg>`,
+  phone_case: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect x="28" y="10" width="44" height="80" rx="10" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
+    <rect x="36" y="18" width="28" height="46" rx="3" fill="var(--green-glow)"/>
+    <circle cx="50" cy="74" r="4" fill="none" stroke="var(--green-bright)" stroke-width="1.5"/>
+    <rect x="44" y="14" width="12" height="2.5" rx="1.2" fill="var(--beige-mid)"/>
+  </svg>`,
   reusable_shopping_bag: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
     <path d="M30 30 Q30 12 50 12 Q70 12 70 30" fill="none" stroke="var(--beige-mid)" stroke-width="4"/>
     <path d="M18 30 L82 30 L76 88 L24 88 Z" fill="var(--bg-input)" stroke="var(--green-bright)" stroke-width="2.5"/>
@@ -637,7 +710,7 @@ const CATEGORY_ICONS = {
 };
 
 function getCategoryIcon(category) { return CATEGORY_ICONS[category] || null; }
-function altCardImageId(idx) { return `altImg_${idx}`; }
+function altCardImageId(idx)       { return `altImg_${idx}`; }
 
 function loadAlternativeImages(sorted) {
   sorted.forEach((alt, idx) => {
@@ -651,12 +724,8 @@ function loadAlternativeImages(sorted) {
 }
 
 // ─── AMAZON LINK BUILDER ──────────────────────
-// Uses the AI-generated amazonSearchQuery for a precise, product-matched search
 function buildAmazonSearchUrl(alt) {
-  // Prefer the AI-generated precise query; fall back to name + brand
-  const query = alt.amazonSearchQuery
-    ? alt.amazonSearchQuery.trim()
-    : [alt.name, alt.brand].filter(Boolean).join(' ');
+  const query   = alt.amazonSearchQuery ? alt.amazonSearchQuery.trim() : [alt.name, alt.brand].filter(Boolean).join(' ');
   const encoded = encodeURIComponent(query);
   const domain  = getResultMarketplace().domain;
   return `https://www.${domain}/s?k=${encoded}`;

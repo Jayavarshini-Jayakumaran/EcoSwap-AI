@@ -7,12 +7,28 @@ const MAX_PER_DAY = 60; // each "analysis" in the app makes 2 calls, so this is 
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
+// Comma-separated list of allowed origins, e.g.:
+// "https://jayavarshini-jayakumaran.github.io,http://localhost:8080,http://127.0.0.1:8080"
+function resolveAllowedOrigin(request, env) {
+  const requestOrigin = request.headers.get('Origin') || '';
+  const allowList = (env.ALLOWED_ORIGIN || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
+  if (allowList.includes(requestOrigin)) return requestOrigin;
+  // Always allow localhost/127.0.0.1 on any port for local development.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin)) return requestOrigin;
+  return allowList[0] || '*';
+}
+
 export default {
   async fetch(request, env) {
     const corsHeaders = {
-      'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || '*',
+      'Access-Control-Allow-Origin': resolveAllowedOrigin(request, env),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
+      'Vary': 'Origin',
     };
 
     if (request.method === 'OPTIONS') {

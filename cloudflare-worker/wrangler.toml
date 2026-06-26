@@ -9,4 +9,4 @@ kv_namespaces = [
 
 # GEMINI_API_KEY is set separately via: wrangler secret put GEMINI_API_KEY
 [vars]
-ALLOWED_ORIGIN = "https://jayavarshini-jayakumaran.github.io"
+ALLOWED_ORIGIN = "https://jayavarshini-jayakumaran.github.io,http://localhost:8080,http://127.0.0.1:8080"

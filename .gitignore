@@ -1,25 +1,37 @@
-# secrets - Gemini key lives in Cloudflare now, not here
+# ── Gemini API key ────────────────────────────
+# Key lives in Cloudflare Workers secrets, NOT here
 .env
 .env.local
 .env.*.local
 
-# old client-side key config, not used anymore
+# Old client-side key config (no longer used)
 js/config.js
 
-# wrangler local state
+# ── Cloudflare / Wrangler ─────────────────────
 cloudflare-worker/.wrangler/
 cloudflare-worker/.dev.vars
 .wrangler/
 
-# python local server
+# ── Python (local dev server only) ───────────
+# The venv folder is NOT part of this project.
+# Run: python3 -m http.server 8080
+# Do NOT commit venv/ — it's hundreds of MB of pip internals.
 venv/
 __pycache__/
 *.pyc
+*.pyo
 
-# OS files
+# ── OS files ──────────────────────────────────
 .DS_Store
+.DS_Store?
+._*
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# editor
+# ── Editor / IDE ──────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
